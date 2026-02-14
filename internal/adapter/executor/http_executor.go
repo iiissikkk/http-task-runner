@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"time"
 
@@ -32,9 +33,18 @@ func (e *HTTPExecutor) Execute(ctx context.Context, method string, url string, h
 	}
 	defer resp.Body.Close()
 
+	length := resp.ContentLength
+	if length < 0 {
+		n, copyErr := io.Copy(io.Discard, resp.Body)
+		if copyErr != nil {
+			return service.ExecuteResult{}, copyErr
+		}
+		length = n
+	}
+
 	return service.ExecuteResult{
 		HTTPStatusCode: resp.StatusCode,
 		Headers:        map[string][]string(resp.Header),
-		Length:         resp.ContentLength,
+		Length:         length,
 	}, nil
 }

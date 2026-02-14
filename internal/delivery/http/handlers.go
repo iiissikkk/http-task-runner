@@ -67,10 +67,10 @@ func (h *Handlers) GetTask(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, getTaskResponse{
 		ID:             item.ID,
-		Method:         item.Method,
-		URL:            item.URL,
-		RequestHeaders: item.RequestHeaders,
 		Status:         string(item.Status),
+		HTTPStatusCode: item.HTTPStatusCode,
+		Headers:        item.Headers,
+		Length:         item.Length,
 	})
 }
 
@@ -85,10 +85,10 @@ func (h *Handlers) GetAllTasks(w http.ResponseWriter, r *http.Request) {
 	for _, t := range tasks {
 		resp = append(resp, getTaskResponse{
 			ID:             t.ID,
-			Method:         t.Method,
-			URL:            t.URL,
-			RequestHeaders: t.RequestHeaders,
 			Status:         string(t.Status),
+			HTTPStatusCode: t.HTTPStatusCode,
+			Headers:        t.Headers,
+			Length:         t.Length,
 		})
 	}
 
@@ -109,7 +109,8 @@ func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, deleteTaskResponse{
-		ID: item.ID,
+		ID:             item.ID,
+		HTTPStatusCode: item.HTTPStatusCode,
 	})
 }
 
