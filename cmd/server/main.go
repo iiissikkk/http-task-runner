@@ -12,7 +12,7 @@ import (
 	"todoapp/internal/adapter/executor"
 	"todoapp/internal/config"
 	delivery "todoapp/internal/delivery/http"
-	"todoapp/internal/repository/task"
+	"todoapp/internal/repository/postgres"
 	"todoapp/internal/usecase/task"
 )
 
@@ -26,7 +26,19 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store := store.NewMemoryStore()
+	pool, err := postgres.NewPool(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		fmt.Println("failed to connect to postgres:", err)
+		return
+	}
+	defer pool.Close()
+
+	if err = postgres.RunMigrations(context.Background(), pool); err != nil {
+		fmt.Println("failed to run postgres migrations:", err)
+		return
+	}
+
+	store := postgres.NewStore(pool)
 	httpExecutor := executor.NewHTTPExecutor(cfg.HTTPExecutorTimeout)
 	service := service.NewService(store, httpExecutor)
 	handlers := delivery.NewHandlers(service, cfg.HTTPPort)
