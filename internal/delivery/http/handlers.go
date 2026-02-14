@@ -29,6 +29,10 @@ func NewHandlers(taskService TaskService, port string) *Handlers {
 }
 
 func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
+	if r.Body != nil {
+		defer r.Body.Close()
+	}
+
 	var req createTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
