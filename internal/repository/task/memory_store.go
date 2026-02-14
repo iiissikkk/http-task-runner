@@ -44,12 +44,13 @@ func (s *MemoryStore) GetAll(_ context.Context) ([]task.Task, error) {
 	for _, v := range s.tasks {
 		items = append(items, v)
 	}
-	return items, nil
+
+	return cloneTasks(items), nil
 }
 
 func (s *MemoryStore) Delete(_ context.Context, id string) (task.Task, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	item, ok := s.tasks[id]
 	if !ok {
@@ -93,4 +94,12 @@ func cloneTask(item task.Task) task.Task {
 	}
 
 	return cloned
+}
+
+func cloneTasks(items []task.Task) []task.Task {
+	out := make([]task.Task, len(items))
+	for i := range items {
+		out[i] = cloneTask(items[i])
+	}
+	return out
 }
