@@ -11,6 +11,7 @@ import (
 const (
 	defaultHTTPAddr            = ":9091"
 	defaultHTTPPort            = "9091"
+	defaultDatabaseURL         = ""
 	defaultHTTPExecutorTimeout = 10 * time.Second
 	defaultHTTPReadTimeout     = 10 * time.Second
 	defaultHTTPWriteTimeout    = 10 * time.Second
@@ -19,6 +20,7 @@ const (
 )
 
 type Config struct {
+	DatabaseURL         string
 	HTTPAddr            string
 	HTTPPort            string
 	HTTPExecutorTimeout time.Duration
@@ -59,6 +61,7 @@ func Load() (Config, error) {
 	}
 
 	return Config{
+		DatabaseURL:         getEnv("DATABASE_URL", defaultDatabaseURL),
 		HTTPAddr:            getEnv("HTTP_ADDR", defaultHTTPAddr),
 		HTTPPort:            getEnv("HTTP_PORT", defaultHTTPPort),
 		HTTPExecutorTimeout: executorTimeout,
