@@ -19,13 +19,22 @@ type TaskService interface {
 	DeleteTask(ctx context.Context, id string) (task.Task, error)
 }
 
-type Handlers struct {
-	service TaskService
-	port    string
+type HealthChecker interface {
+	Ping(ctx context.Context) error
 }
 
-func NewHandlers(taskService TaskService, port string) *Handlers {
-	return &Handlers{service: taskService, port: port}
+type Handlers struct {
+	service       TaskService
+	healthChecker HealthChecker
+	port          string
+}
+
+func NewHandlers(taskService TaskService, healthChecker HealthChecker, port string) *Handlers {
+	return &Handlers{
+		service:       taskService,
+		healthChecker: healthChecker,
+		port:          port,
+	}
 }
 
 func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +124,16 @@ func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
+	if h.healthChecker != nil {
+		if err := h.healthChecker.Ping(r.Context()); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, getHealthStatus{
+				Status: "unavailable",
+				Port:   h.port,
+			})
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, getHealthStatus{
 		Status: "ok",
 		Port:   h.port,

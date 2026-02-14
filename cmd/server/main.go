@@ -40,8 +40,8 @@ func main() {
 
 	store := postgres.NewStore(pool)
 	httpExecutor := executor.NewHTTPExecutor(cfg.HTTPExecutorTimeout)
-	service := service.NewService(store, httpExecutor)
-	handlers := delivery.NewHandlers(service, cfg.HTTPPort)
+	taskService := service.NewService(store, httpExecutor)
+	handlers := delivery.NewHandlers(taskService, store, cfg.HTTPPort)
 	router := delivery.NewRouter(handlers)
 
 	server := delivery.NewServer(delivery.ServerConfig{
