@@ -34,6 +34,11 @@ func (s *Store) Create(ctx context.Context, item task.Task) error {
 		return err
 	}
 
+	respHeadersJSON, err := marshalResponseHeaders(item.Headers)
+	if err != nil {
+		return err
+	}
+
 	const query = `
 		INSERT INTO tasks (
 			id,
@@ -41,10 +46,13 @@ func (s *Store) Create(ctx context.Context, item task.Task) error {
 			url,
 			status,
 			request_headers,
+			http_status_code,
+			response_headers,
+			length,
 			created_at,
 			updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	_, err = s.pool.Exec(
@@ -55,6 +63,9 @@ func (s *Store) Create(ctx context.Context, item task.Task) error {
 		item.URL,
 		string(item.Status),
 		reqHeadersJSON,
+		item.HTTPStatusCode,
+		respHeadersJSON,
+		item.Length,
 		time.Now().UTC(),
 		nil,
 	)
@@ -71,15 +82,18 @@ func (s *Store) GetByID(ctx context.Context, id string) (task.Task, error) {
 	}
 
 	const query = `
-		SELECT
-			id,
-			method,
-			url,
-			status,
-			request_headers
-		FROM tasks
-		WHERE id = $1
-	`
+			SELECT
+				id,
+				method,
+				url,
+				status,
+				request_headers,
+				http_status_code,
+				response_headers,
+				length
+			FROM tasks
+			WHERE id = $1
+		`
 
 	item, err := scanTaskRow(s.pool.QueryRow(ctx, query, id))
 	if err != nil {
@@ -98,15 +112,18 @@ func (s *Store) GetAll(ctx context.Context) ([]task.Task, error) {
 	}
 
 	const query = `
-		SELECT
-			id,
-			method,
-			url,
-			status,
-			request_headers
-		FROM tasks
-		ORDER BY created_at ASC, id ASC
-	`
+			SELECT
+				id,
+				method,
+				url,
+				status,
+				request_headers,
+				http_status_code,
+				response_headers,
+				length
+			FROM tasks
+			ORDER BY created_at ASC, id ASC
+		`
 
 	rows, err := s.pool.Query(ctx, query)
 	if err != nil {
@@ -135,11 +152,19 @@ func (s *Store) Update(ctx context.Context, item task.Task) error {
 		return errors.New("postgres pool is nil")
 	}
 
+	respHeadersJSON, err := marshalResponseHeaders(item.Headers)
+	if err != nil {
+		return err
+	}
+
 	const query = `
 		UPDATE tasks
 		SET
 			status = $2,
-			updated_at = $3
+			http_status_code = $3,
+			response_headers = $4,
+			length = $5,
+			updated_at = $6
 		WHERE id = $1
 	`
 
@@ -148,6 +173,9 @@ func (s *Store) Update(ctx context.Context, item task.Task) error {
 		query,
 		item.ID,
 		string(item.Status),
+		item.HTTPStatusCode,
+		respHeadersJSON,
+		item.Length,
 		time.Now().UTC(),
 	)
 	if err != nil {
@@ -168,13 +196,16 @@ func (s *Store) Delete(ctx context.Context, id string) (task.Task, error) {
 	const query = `
 		DELETE FROM tasks
 		WHERE id = $1
-			RETURNING
-				id,
-				method,
-				url,
-				status,
-				request_headers
-	`
+				RETURNING
+					id,
+					method,
+					url,
+					status,
+					request_headers,
+					http_status_code,
+					response_headers,
+					length
+		`
 
 	item, err := scanTaskRow(s.pool.QueryRow(ctx, query, id))
 	if err != nil {
@@ -193,9 +224,10 @@ type taskRowScanner interface {
 
 func scanTaskRow(row taskRowScanner) (task.Task, error) {
 	var (
-		item           task.Task
-		status         string
-		reqHeadersJSON []byte
+		item            task.Task
+		status          string
+		reqHeadersJSON  []byte
+		respHeadersJSON []byte
 	)
 
 	if err := row.Scan(
@@ -204,6 +236,9 @@ func scanTaskRow(row taskRowScanner) (task.Task, error) {
 		&item.URL,
 		&status,
 		&reqHeadersJSON,
+		&item.HTTPStatusCode,
+		&respHeadersJSON,
+		&item.Length,
 	); err != nil {
 		return task.Task{}, err
 	}
@@ -216,7 +251,11 @@ func scanTaskRow(row taskRowScanner) (task.Task, error) {
 		return task.Task{}, fmt.Errorf("unmarshal request headers: %w", err)
 	}
 
-	item.Headers = map[string][]string{}
+	if len(respHeadersJSON) == 0 {
+		item.Headers = map[string][]string{}
+	} else if err := json.Unmarshal(respHeadersJSON, &item.Headers); err != nil {
+		return task.Task{}, fmt.Errorf("unmarshal response headers: %w", err)
+	}
 
 	return item, nil
 }
@@ -229,6 +268,19 @@ func marshalRequestHeaders(headers map[string]string) ([]byte, error) {
 	payload, err := json.Marshal(headers)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request headers: %w", err)
+	}
+
+	return payload, nil
+}
+
+func marshalResponseHeaders(headers map[string][]string) ([]byte, error) {
+	if headers == nil {
+		headers = map[string][]string{}
+	}
+
+	payload, err := json.Marshal(headers)
+	if err != nil {
+		return nil, fmt.Errorf("marshal response headers: %w", err)
 	}
 
 	return payload, nil
