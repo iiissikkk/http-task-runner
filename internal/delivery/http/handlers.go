@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,13 +12,20 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type TaskService interface {
+	CreateTask(ctx context.Context, input service.CreateInput) (string, error)
+	GetTask(ctx context.Context, id string) (task.Task, error)
+	GetAllTasks(ctx context.Context) ([]task.Task, error)
+	DeleteTask(ctx context.Context, id string) (task.Task, error)
+}
+
 type Handlers struct {
-	service *service.Service
+	service TaskService
 	port    string
 }
 
-func NewHandlers(service *service.Service, port string) *Handlers {
-	return &Handlers{service: service, port: port}
+func NewHandlers(taskService TaskService, port string) *Handlers {
+	return &Handlers{service: taskService, port: port}
 }
 
 func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
