@@ -11,11 +11,11 @@ type createTaskResponse struct {
 }
 
 type getTaskResponse struct {
-	ID             string              `json:"id"`
-	Status         string              `json:"status"`
-	HTTPStatusCode int                 `json:"httpStatusCode"`
-	Headers        map[string][]string `json:"headers"`
-	Length         int64               `json:"length"`
+	ID             string            `json:"id"`
+	Method         string            `json:"method"`
+	URL            string            `json:"url"`
+	RequestHeaders map[string]string `json:"requestHeaders"`
+	Status         string            `json:"status"`
 }
 
 type getAllTasksResponse struct {
@@ -23,8 +23,7 @@ type getAllTasksResponse struct {
 }
 
 type deleteTaskResponse struct {
-	ID             string `json:"id"`
-	HTTPStatusCode int    `json:"httpStatusCode"`
+	ID string `json:"id"`
 }
 
 type getHealthStatus struct {
