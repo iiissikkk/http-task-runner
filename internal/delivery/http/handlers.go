@@ -5,17 +5,19 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"todoapp/internal/domain/task"
 	"todoapp/internal/usecase/task"
+
+	"github.com/gorilla/mux"
 )
 
 type Handlers struct {
 	service *service.Service
+	port    string
 }
 
-func NewHandlers(service *service.Service) *Handlers {
-	return &Handlers{service: service}
+func NewHandlers(service *service.Service, port string) *Handlers {
+	return &Handlers{service: service, port: port}
 }
 
 func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +59,53 @@ func (h *Handlers) GetTask(w http.ResponseWriter, r *http.Request) {
 		HTTPStatusCode: item.HTTPStatusCode,
 		Headers:        item.Headers,
 		Length:         item.Length,
+	})
+}
+
+func (h *Handlers) GetAllTasks(w http.ResponseWriter, r *http.Request) {
+	tasks, err := h.service.GetAllTasks(r.Context())
+	if err != nil {
+		writeJSON(w, mapDomainErrorToStatus(err), errorResponse{Error: err.Error()})
+		return
+	}
+
+	resp := make([]getTaskResponse, 0, len(tasks))
+	for _, t := range tasks {
+		resp = append(resp, getTaskResponse{
+			ID:             t.ID,
+			Status:         string(t.Status),
+			HTTPStatusCode: t.HTTPStatusCode,
+			Headers:        t.Headers,
+			Length:         t.Length,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, getAllTasksResponse{Tasks: resp})
+}
+
+func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid task id in path"})
+		return
+	}
+
+	item, err := h.service.DeleteTask(r.Context(), id)
+	if err != nil {
+		writeJSON(w, mapDomainErrorToStatus(err), errorResponse{Error: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, deleteTaskResponse{
+		ID:             item.ID,
+		HTTPStatusCode: item.HTTPStatusCode,
+	})
+}
+
+func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, getHealthStatus{
+		Status: "ok",
+		Port:   h.port,
 	})
 }
 

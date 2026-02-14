@@ -14,7 +14,9 @@ import (
 type Store interface {
 	Create(ctx context.Context, task task.Task) error
 	GetByID(ctx context.Context, id string) (task.Task, error)
+	GetAll(ctx context.Context) ([]task.Task, error)
 	Update(ctx context.Context, task task.Task) error
+	Delete(ctx context.Context, id string) (task.Task, error)
 }
 
 type ExecuteResult struct {
@@ -74,6 +76,14 @@ func (s *Service) CreateTask(ctx context.Context, input CreateInput) (string, er
 
 func (s *Service) GetTask(ctx context.Context, id string) (task.Task, error) {
 	return s.store.GetByID(ctx, id)
+}
+
+func (s *Service) GetAllTasks(ctx context.Context) ([]task.Task, error) {
+	return s.store.GetAll(ctx)
+}
+
+func (s *Service) DeleteTask(ctx context.Context, id string) (task.Task, error) {
+	return s.store.Delete(ctx, id)
 }
 
 func (s *Service) runTask(taskID string) {

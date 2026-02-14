@@ -18,6 +18,20 @@ type getTaskResponse struct {
 	Length         int64               `json:"length"`
 }
 
+type getAllTasksResponse struct {
+	Tasks []getTaskResponse `json:"tasks"`
+}
+
+type deleteTaskResponse struct {
+	ID             string `json:"id"`
+	HTTPStatusCode int    `json:"httpStatusCode"`
+}
+
+type getHealthStatus struct {
+	Status string `json:"status"`
+	Port   string `json:"port,omitempty"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
