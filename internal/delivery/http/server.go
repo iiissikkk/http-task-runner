@@ -1,16 +1,39 @@
 package delivery
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+	"time"
+)
 
 type Server struct {
-	addr   string
-	router http.Handler
+	server *http.Server
 }
 
-func NewServer(addr string, router http.Handler) *Server {
-	return &Server{addr: addr, router: router}
+type ServerConfig struct {
+	Addr         string
+	Handler      http.Handler
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+}
+
+func NewServer(cfg ServerConfig) *Server {
+	return &Server{
+		server: &http.Server{
+			Addr:         cfg.Addr,
+			Handler:      cfg.Handler,
+			ReadTimeout:  cfg.ReadTimeout,
+			WriteTimeout: cfg.WriteTimeout,
+			IdleTimeout:  cfg.IdleTimeout,
+		},
+	}
 }
 
 func (s *Server) Start() error {
-	return http.ListenAndServe(s.addr, s.router)
+	return s.server.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.server.Shutdown(ctx)
 }
