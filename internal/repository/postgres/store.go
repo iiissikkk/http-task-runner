@@ -24,6 +24,13 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+func (s *Store) Ping(ctx context.Context) error {
+	if s.pool == nil {
+		return errors.New("postgres pool is nil")
+	}
+	return s.pool.Ping(ctx)
+}
+
 func (s *Store) Create(ctx context.Context, item task.Task) error {
 	if s.pool == nil {
 		return errors.New("postgres pool is nil")

@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -35,6 +37,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	databaseURL := getEnv("DATABASE_URL", defaultDatabaseURL)
+	if err := validateDatabaseURL(databaseURL); err != nil {
+		return Config{}, err
+	}
+
 	executorTimeout, err := getDurationEnv("HTTP_EXECUTOR_TIMEOUT", defaultHTTPExecutorTimeout)
 	if err != nil {
 		return Config{}, err
@@ -61,7 +68,7 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		DatabaseURL:         getEnv("DATABASE_URL", defaultDatabaseURL),
+		DatabaseURL:         databaseURL,
 		HTTPAddr:            getEnv("HTTP_ADDR", defaultHTTPAddr),
 		HTTPPort:            getEnv("HTTP_PORT", defaultHTTPPort),
 		HTTPExecutorTimeout: executorTimeout,
@@ -70,6 +77,19 @@ func Load() (Config, error) {
 		HTTPIdleTimeout:     idleTimeout,
 		HTTPShutdownTimeout: shutdownTimeout,
 	}, nil
+}
+
+func validateDatabaseURL(raw string) error {
+	dsn := strings.TrimSpace(raw)
+	if dsn == "" {
+		return errors.New("DATABASE_URL is required")
+	}
+
+	if _, err := pgxpool.ParseConfig(dsn); err != nil {
+		return fmt.Errorf("invalid DATABASE_URL: %w", err)
+	}
+
+	return nil
 }
 
 func getEnv(key, fallback string) string {

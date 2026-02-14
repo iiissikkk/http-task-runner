@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -13,36 +18,53 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 		return errors.New("postgres pool is nil")
 	}
 
-	const createTasksTable = `
-		CREATE TABLE IF NOT EXISTS tasks (
-			id UUID PRIMARY KEY,
-			method TEXT NOT NULL,
-			url TEXT NOT NULL,
-			status TEXT NOT NULL,
-			request_headers JSONB NOT NULL,
-			http_status_code INTEGER NOT NULL DEFAULT 0,
-			response_headers JSONB NOT NULL DEFAULT '{}'::jsonb,
-			length BIGINT NOT NULL DEFAULT 0,
-			created_at TIMESTAMPTZ NOT NULL,
-			updated_at TIMESTAMPTZ
-		);
-	`
-
-	if _, err := pool.Exec(ctx, createTasksTable); err != nil {
-		return fmt.Errorf("create tasks table: %w", err)
+	dir, err := migrationsDir()
+	if err != nil {
+		return err
 	}
 
-	statements := []string{
-		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS http_status_code INTEGER NOT NULL DEFAULT 0;`,
-		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS response_headers JSONB NOT NULL DEFAULT '{}'::jsonb;`,
-		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS length BIGINT NOT NULL DEFAULT 0;`,
+	paths, err := filepath.Glob(filepath.Join(dir, "*.up.sql"))
+	if err != nil {
+		return fmt.Errorf("find migration files: %w", err)
 	}
+	if len(paths) == 0 {
+		return fmt.Errorf("no up migrations found in %s", dir)
+	}
+	sort.Strings(paths)
 
-	for _, sql := range statements {
-		if _, err := pool.Exec(ctx, sql); err != nil {
-			return fmt.Errorf("alter tasks table: %w", err)
+	for _, path := range paths {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("read migration %s: %w", filepath.Base(path), readErr)
+		}
+
+		query := strings.TrimSpace(string(content))
+		if query == "" {
+			continue
+		}
+
+		if _, execErr := pool.Exec(ctx, query); execErr != nil {
+			return fmt.Errorf("apply migration %s: %w", filepath.Base(path), execErr)
 		}
 	}
 
 	return nil
+}
+
+func migrationsDir() (string, error) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", errors.New("resolve migrations path: runtime caller failed")
+	}
+
+	dir := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "migrations"))
+	info, err := os.Stat(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve migrations path: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("resolve migrations path: %s is not a directory", dir)
+	}
+
+	return dir, nil
 }
