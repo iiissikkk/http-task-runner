@@ -33,14 +33,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err = postgres.RunMigrations(context.Background(), pool); err != nil {
-		fmt.Println("failed to run postgres migrations:", err)
-		return
-	}
-
 	store := postgres.NewStore(pool)
 	httpExecutor := executor.NewHTTPExecutor(cfg.HTTPExecutorTimeout)
-	taskService := service.NewService(store, httpExecutor)
+	taskService := service.NewService(store, httpExecutor, store)
 	handlers := delivery.NewHandlers(taskService, store, cfg.HTTPPort)
 	router := delivery.NewRouter(handlers)
 

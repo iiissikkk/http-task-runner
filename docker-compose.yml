@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./migrations:/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HTTP_ADDR: ":9091"
+      HTTP_PORT: "9091"
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/postgres?sslmode=disable"
+      HTTP_EXECUTOR_TIMEOUT: "10s"
+      HTTP_SERVER_READ_TIMEOUT: "10s"
+      HTTP_SERVER_WRITE_TIMEOUT: "10s"
+      HTTP_SERVER_IDLE_TIMEOUT: "60s"
+      HTTP_SHUTDOWN_TIMEOUT: "10s"
+    ports:
+      - "9091:9091"
+
+volumes:
+  pg_data:

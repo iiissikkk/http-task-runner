@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"todoapp/internal/domain/task"
@@ -18,7 +19,16 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
+type DBTX interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+type txContextKey struct{}
+
 var _ service.Store = (*Store)(nil)
+var _ service.TxManager = (*Store)(nil)
 
 func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
@@ -31,9 +41,43 @@ func (s *Store) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
 }
 
-func (s *Store) Create(ctx context.Context, item task.Task) error {
+func (s *Store) WithinTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	if s.pool == nil {
 		return errors.New("postgres pool is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	txCtx := context.WithValue(ctx, txContextKey{}, tx)
+	if err = fn(txCtx); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+
+	committed = true
+	return nil
+}
+
+func (s *Store) Create(ctx context.Context, item task.Task) error {
+	db, err := s.dbFromCtx(ctx)
+	if err != nil {
+		return err
 	}
 
 	reqHeadersJSON, err := marshalRequestHeaders(item.RequestHeaders)
@@ -62,35 +106,31 @@ func (s *Store) Create(ctx context.Context, item task.Task) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
-	if err = s.withTx(ctx, func(tx pgx.Tx) error {
-		_, execErr := tx.Exec(
-			ctx,
-			query,
-			item.ID,
-			item.Method,
-			item.URL,
-			string(item.Status),
-			reqHeadersJSON,
-			item.HTTPStatusCode,
-			respHeadersJSON,
-			item.Length,
-			time.Now().UTC(),
-			nil,
-		)
-		if execErr != nil {
-			return fmt.Errorf("insert task: %w", execErr)
-		}
-		return nil
-	}); err != nil {
-		return err
+	_, err = db.Exec(
+		ctx,
+		query,
+		item.ID,
+		item.Method,
+		item.URL,
+		string(item.Status),
+		reqHeadersJSON,
+		item.HTTPStatusCode,
+		respHeadersJSON,
+		item.Length,
+		time.Now().UTC(),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("insert task: %w", err)
 	}
 
 	return nil
 }
 
 func (s *Store) GetByID(ctx context.Context, id string) (task.Task, error) {
-	if s.pool == nil {
-		return task.Task{}, errors.New("postgres pool is nil")
+	db, err := s.dbFromCtx(ctx)
+	if err != nil {
+		return task.Task{}, err
 	}
 
 	const query = `
@@ -107,7 +147,7 @@ func (s *Store) GetByID(ctx context.Context, id string) (task.Task, error) {
 			WHERE id = $1
 		`
 
-	item, err := scanTaskRow(s.pool.QueryRow(ctx, query, id))
+	item, err := scanTaskRow(db.QueryRow(ctx, query, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return task.Task{}, task.ErrTaskNotFound
@@ -119,8 +159,9 @@ func (s *Store) GetByID(ctx context.Context, id string) (task.Task, error) {
 }
 
 func (s *Store) GetAll(ctx context.Context) ([]task.Task, error) {
-	if s.pool == nil {
-		return nil, errors.New("postgres pool is nil")
+	db, err := s.dbFromCtx(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	const query = `
@@ -137,7 +178,7 @@ func (s *Store) GetAll(ctx context.Context) ([]task.Task, error) {
 			ORDER BY created_at ASC, id ASC
 		`
 
-	rows, err := s.pool.Query(ctx, query)
+	rows, err := db.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("select all tasks: %w", err)
 	}
@@ -152,7 +193,7 @@ func (s *Store) GetAll(ctx context.Context) ([]task.Task, error) {
 		items = append(items, item)
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate task rows: %w", err)
 	}
 
@@ -160,8 +201,9 @@ func (s *Store) GetAll(ctx context.Context) ([]task.Task, error) {
 }
 
 func (s *Store) Update(ctx context.Context, item task.Task) error {
-	if s.pool == nil {
-		return errors.New("postgres pool is nil")
+	db, err := s.dbFromCtx(ctx)
+	if err != nil {
+		return err
 	}
 
 	respHeadersJSON, err := marshalResponseHeaders(item.Headers)
@@ -180,34 +222,30 @@ func (s *Store) Update(ctx context.Context, item task.Task) error {
 		WHERE id = $1
 	`
 
-	if err = s.withTx(ctx, func(tx pgx.Tx) error {
-		tag, execErr := tx.Exec(
-			ctx,
-			query,
-			item.ID,
-			string(item.Status),
-			item.HTTPStatusCode,
-			respHeadersJSON,
-			item.Length,
-			time.Now().UTC(),
-		)
-		if execErr != nil {
-			return fmt.Errorf("update task: %w", execErr)
-		}
-		if tag.RowsAffected() == 0 {
-			return task.ErrTaskNotFound
-		}
-		return nil
-	}); err != nil {
-		return err
+	tag, err := db.Exec(
+		ctx,
+		query,
+		item.ID,
+		string(item.Status),
+		item.HTTPStatusCode,
+		respHeadersJSON,
+		item.Length,
+		time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("update task: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return task.ErrTaskNotFound
 	}
 
 	return nil
 }
 
 func (s *Store) Delete(ctx context.Context, id string) (task.Task, error) {
-	if s.pool == nil {
-		return task.Task{}, errors.New("postgres pool is nil")
+	db, err := s.dbFromCtx(ctx)
+	if err != nil {
+		return task.Task{}, err
 	}
 
 	const query = `
@@ -222,50 +260,31 @@ func (s *Store) Delete(ctx context.Context, id string) (task.Task, error) {
 					http_status_code,
 					response_headers,
 					length
-		`
+	`
 
-	var item task.Task
-	err := s.withTx(ctx, func(tx pgx.Tx) error {
-		deleted, queryErr := scanTaskRow(tx.QueryRow(ctx, query, id))
-		if queryErr != nil {
-			if errors.Is(queryErr, pgx.ErrNoRows) {
-				return task.ErrTaskNotFound
-			}
-			return fmt.Errorf("delete task: %w", queryErr)
-		}
-		item = deleted
-		return nil
-	})
+	item, err := scanTaskRow(db.QueryRow(ctx, query, id))
 	if err != nil {
-		return task.Task{}, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return task.Task{}, task.ErrTaskNotFound
+		}
+		return task.Task{}, fmt.Errorf("delete task: %w", err)
 	}
 
 	return item, nil
 }
 
-func (s *Store) withTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+func (s *Store) dbFromCtx(ctx context.Context) (DBTX, error) {
+	if s.pool == nil {
+		return nil, errors.New("postgres pool is nil")
 	}
 
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback(ctx)
+	if ctx != nil {
+		if tx, ok := ctx.Value(txContextKey{}).(pgx.Tx); ok {
+			return tx, nil
 		}
-	}()
-
-	if err = fn(tx); err != nil {
-		return err
 	}
 
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit tx: %w", err)
-	}
-
-	committed = true
-	return nil
+	return s.pool, nil
 }
 
 type taskRowScanner interface {

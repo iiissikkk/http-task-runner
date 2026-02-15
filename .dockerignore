@@ -1,0 +1,9 @@
+.git
+.idea
+.env
+LOCAL_INSTRUCTION.md
+
+*.log
+bin/
+dist/
+tmp/
