@@ -19,6 +19,10 @@ type Store interface {
 	Delete(ctx context.Context, id string) (task.Task, error)
 }
 
+type TxManager interface {
+	WithinTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
 type ExecuteResult struct {
 	HTTPStatusCode int
 	Headers        map[string][]string
@@ -30,9 +34,10 @@ type Executor interface {
 }
 
 type Service struct {
-	store    Store
-	executor Executor
-	idFn     func() string
+	store     Store
+	executor  Executor
+	txManager TxManager
+	idFn      func() string
 }
 
 type CreateInput struct {
@@ -41,10 +46,16 @@ type CreateInput struct {
 	Headers map[string]string
 }
 
-func NewService(store Store, executor Executor) *Service {
+func NewService(store Store, executor Executor, txManager ...TxManager) *Service {
+	var manager TxManager
+	if len(txManager) > 0 {
+		manager = txManager[0]
+	}
+
 	return &Service{
-		store:    store,
-		executor: executor,
+		store:     store,
+		executor:  executor,
+		txManager: manager,
 		idFn: func() string {
 			return uuid.NewString()
 		},
@@ -65,7 +76,9 @@ func (s *Service) CreateTask(ctx context.Context, input CreateInput) (string, er
 		Headers:        map[string][]string{},
 	}
 
-	if err := s.store.Create(ctx, t); err != nil {
+	if err := s.withTx(ctx, func(txCtx context.Context) error {
+		return s.store.Create(txCtx, t)
+	}); err != nil {
 		return "", err
 	}
 
@@ -83,7 +96,17 @@ func (s *Service) GetAllTasks(ctx context.Context) ([]task.Task, error) {
 }
 
 func (s *Service) DeleteTask(ctx context.Context, id string) (task.Task, error) {
-	return s.store.Delete(ctx, id)
+	var item task.Task
+
+	if err := s.withTx(ctx, func(txCtx context.Context) error {
+		var err error
+		item, err = s.store.Delete(txCtx, id)
+		return err
+	}); err != nil {
+		return task.Task{}, err
+	}
+
+	return item, nil
 }
 
 func (s *Service) runTask(taskID string) {
@@ -95,14 +118,18 @@ func (s *Service) runTask(taskID string) {
 	}
 
 	t.Status = task.StatusInProcess
-	if err = s.store.Update(ctx, t); err != nil {
+	if err = s.withTx(ctx, func(txCtx context.Context) error {
+		return s.store.Update(txCtx, t)
+	}); err != nil {
 		return
 	}
 
 	result, err := s.executor.Execute(ctx, t.Method, t.URL, t.RequestHeaders)
 	if err != nil {
 		t.Status = task.StatusError
-		_ = s.store.Update(ctx, t)
+		_ = s.withTx(ctx, func(txCtx context.Context) error {
+			return s.store.Update(txCtx, t)
+		})
 		return
 	}
 
@@ -110,7 +137,17 @@ func (s *Service) runTask(taskID string) {
 	t.HTTPStatusCode = result.HTTPStatusCode
 	t.Headers = copyResponseHeaders(result.Headers)
 	t.Length = result.Length
-	_ = s.store.Update(ctx, t)
+	_ = s.withTx(ctx, func(txCtx context.Context) error {
+		return s.store.Update(txCtx, t)
+	})
+}
+
+func (s *Service) withTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.txManager == nil {
+		return fn(ctx)
+	}
+
+	return s.txManager.WithinTx(ctx, fn)
 }
 
 func validateInput(input CreateInput) error {
