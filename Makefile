@@ -1,22 +1,32 @@
-.PHONY: run test docker-build docker-compose-up docker-compose-down migrate-up migrate-down
+.PHONY: run up down test docker-build docker-compose-up docker-compose-down migrate-up migrate-down ps
 
-run:
-	go run ./cmd/server
+COMPOSE := docker compose
+
+run: up
+
+up:
+	$(COMPOSE) up --build -d
+
+down:
+	$(COMPOSE) down --remove-orphans
 
 test:
-	go test ./...
+	$(COMPOSE) run --rm app go test ./...
 
 docker-build:
 	docker build -t http-task-runner:local .
 
-docker-compose-up:
-	docker compose up --build -d
+docker-compose-up: up
 
-docker-compose-down:
-	docker compose down
+docker-compose-down: down
 
 migrate-up:
-	go run ./cmd/migrate up
+	$(COMPOSE) up -d db
+	$(COMPOSE) run --rm app go run ./cmd/migrate up
 
 migrate-down:
-	go run ./cmd/migrate down
+	$(COMPOSE) up -d db
+	$(COMPOSE) run --rm app go run ./cmd/migrate down
+
+ps:
+	$(COMPOSE) ps

@@ -27,10 +27,10 @@
 
 ## Запуск локально
 
-1. Запустите PostgreSQL (пример через Docker):
+1. Поднимите контейнеры (приложение + БД):
 
 ```bash
-make docker-compose-up
+make up
 ```
 
 2. Примените миграции (вручную, не на старте приложения):
@@ -39,10 +39,10 @@ make docker-compose-up
 make migrate-up
 ```
 
-3. Запустите приложение:
+3. Проверить состояние контейнеров:
 
 ```bash
-make run
+make ps
 ```
 
 ## Миграции
@@ -70,13 +70,13 @@ make docker-build
 Запустить приложение и БД:
 
 ```bash
-make docker-compose-up
+make up
 ```
 
 Остановить:
 
 ```bash
-make docker-compose-down
+make down
 ```
 
 ## Примеры API
