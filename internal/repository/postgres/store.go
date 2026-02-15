@@ -62,22 +62,27 @@ func (s *Store) Create(ctx context.Context, item task.Task) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
-	_, err = s.pool.Exec(
-		ctx,
-		query,
-		item.ID,
-		item.Method,
-		item.URL,
-		string(item.Status),
-		reqHeadersJSON,
-		item.HTTPStatusCode,
-		respHeadersJSON,
-		item.Length,
-		time.Now().UTC(),
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("insert task: %w", err)
+	if err = s.withTx(ctx, func(tx pgx.Tx) error {
+		_, execErr := tx.Exec(
+			ctx,
+			query,
+			item.ID,
+			item.Method,
+			item.URL,
+			string(item.Status),
+			reqHeadersJSON,
+			item.HTTPStatusCode,
+			respHeadersJSON,
+			item.Length,
+			time.Now().UTC(),
+			nil,
+		)
+		if execErr != nil {
+			return fmt.Errorf("insert task: %w", execErr)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	return nil
@@ -175,21 +180,26 @@ func (s *Store) Update(ctx context.Context, item task.Task) error {
 		WHERE id = $1
 	`
 
-	tag, err := s.pool.Exec(
-		ctx,
-		query,
-		item.ID,
-		string(item.Status),
-		item.HTTPStatusCode,
-		respHeadersJSON,
-		item.Length,
-		time.Now().UTC(),
-	)
-	if err != nil {
-		return fmt.Errorf("update task: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return task.ErrTaskNotFound
+	if err = s.withTx(ctx, func(tx pgx.Tx) error {
+		tag, execErr := tx.Exec(
+			ctx,
+			query,
+			item.ID,
+			string(item.Status),
+			item.HTTPStatusCode,
+			respHeadersJSON,
+			item.Length,
+			time.Now().UTC(),
+		)
+		if execErr != nil {
+			return fmt.Errorf("update task: %w", execErr)
+		}
+		if tag.RowsAffected() == 0 {
+			return task.ErrTaskNotFound
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	return nil
@@ -214,15 +224,48 @@ func (s *Store) Delete(ctx context.Context, id string) (task.Task, error) {
 					length
 		`
 
-	item, err := scanTaskRow(s.pool.QueryRow(ctx, query, id))
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return task.Task{}, task.ErrTaskNotFound
+	var item task.Task
+	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		deleted, queryErr := scanTaskRow(tx.QueryRow(ctx, query, id))
+		if queryErr != nil {
+			if errors.Is(queryErr, pgx.ErrNoRows) {
+				return task.ErrTaskNotFound
+			}
+			return fmt.Errorf("delete task: %w", queryErr)
 		}
-		return task.Task{}, fmt.Errorf("delete task: %w", err)
+		item = deleted
+		return nil
+	})
+	if err != nil {
+		return task.Task{}, err
 	}
 
 	return item, nil
+}
+
+func (s *Store) withTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if err = fn(tx); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+
+	committed = true
+	return nil
 }
 
 type taskRowScanner interface {

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -43,7 +44,7 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 			continue
 		}
 
-		if _, execErr := pool.Exec(ctx, query); execErr != nil {
+		if execErr := execMigrationTx(ctx, pool, query); execErr != nil {
 			return fmt.Errorf("apply migration %s: %w", filepath.Base(path), execErr)
 		}
 	}
@@ -67,4 +68,29 @@ func migrationsDir() (string, error) {
 	}
 
 	return dir, nil
+}
+
+func execMigrationTx(ctx context.Context, pool *pgxpool.Pool, query string) error {
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if _, err = tx.Exec(ctx, query); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+
+	committed = true
+	return nil
 }
