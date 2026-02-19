@@ -9,6 +9,8 @@
 - `GET /tasks` получение списка всех задач
 - `DELETE /task/{id}` удаление задачи
 - `GET /healthz` проверка состояния сервиса
+- `GET /swagger` Swagger
+- `GET /swagger/index.html` Swagger UI
 
 ## Конфигурация
 
@@ -114,8 +116,28 @@ curl -s http://localhost:9091/tasks
 curl -s http://localhost:9091/healthz
 ```
 
+Swagger UI:
+
+```bash
+curl -s http://localhost:9091/swagger/index.html
+```
+
 ## Тесты
 
 ```bash
 make test
 ```
+
+## OAPI Codegen
+
+Источник OpenAPI схемы:
+- `cmd/docs/swagger.yml`
+
+Генерация Go-кода (models + embedded spec):
+
+```bash
+make oapi-gen
+```
+
+Сгенерированный файл появится в:
+- `cmd/docs/oapi.gen.go`

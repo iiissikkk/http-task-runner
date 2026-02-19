@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"todoapp/internal/domain/task"
 	"todoapp/internal/usecase/task"
@@ -124,14 +125,23 @@ func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
-	if h.healthChecker != nil {
-		if err := h.healthChecker.Ping(r.Context()); err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, getHealthStatus{
-				Status: "unavailable",
-				Port:   h.port,
-			})
-			return
-		}
+	if h.healthChecker == nil {
+		writeJSON(w, http.StatusServiceUnavailable, getHealthStatus{
+			Status: "unavailable",
+			Port:   h.port,
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := h.healthChecker.Ping(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, getHealthStatus{
+			Status: "unavailable",
+			Port:   h.port,
+		})
+		return
 	}
 
 	writeJSON(w, http.StatusOK, getHealthStatus{

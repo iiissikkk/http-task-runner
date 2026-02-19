@@ -1,0 +1,251 @@
+openapi: 3.0.3
+info:
+  title: HTTP Task Runner API
+  version: 1.0.0
+  description: API for creating HTTP tasks.
+servers:
+  - url: http://localhost:9091
+
+paths:
+  /task:
+    post:
+      tags:
+        - tasks
+      summary: Create task
+      description: Creates a new asynchronous HTTP task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '200':
+          description: Task created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTaskResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /tasks:
+    get:
+      tags:
+        - tasks
+      summary: Get all tasks
+      description: Returns all tasks.
+      responses:
+        '200':
+          description: Task list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAllTasksResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /task/{id}:
+    get:
+      tags:
+        - tasks
+      summary: Get task by ID
+      description: Returns one task by ID.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetTaskResponse'
+        '400':
+          description: Invalid task ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - tasks
+      summary: Delete task by ID
+      description: Deletes one task by ID.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteTaskResponse'
+        '400':
+          description: Invalid task ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /healthz:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: Returns 200 only when health check ping is successful. Returns 503 when health checker is unavailable or ping fails.
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    port: "9091"
+        '503':
+          description: Service is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                unavailable:
+                  value:
+                    status: unavailable
+                    port: "9091"
+components:
+  schemas:
+    CreateTaskRequest:
+      type: object
+      required:
+        - method
+        - url
+      properties:
+        method:
+          type: string
+          example: GET
+        url:
+          type: string
+          example: https://httpbin.org/get
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            Authorization: Test 4
+    CreateTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: c8fa73dd-25da-4372-a79f-f846f0ce1ccd
+    GetTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: c8fa73dd-25da-4372-a79f-f846f0ce1ccd
+        status:
+          type: string
+          enum:
+            - new
+            - in_process
+            - done
+            - error
+          example: done
+        httpStatusCode:
+          type: integer
+          example: 200
+        headers:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            Content-Type:
+              - application/json
+        length:
+          type: integer
+          format: int64
+          example: 305
+    GetAllTasksResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/GetTaskResponse'
+    DeleteTaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: c8fa73dd-25da-4372-a79f-f846f0ce1ccd
+        httpStatusCode:
+          type: integer
+          example: 200
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - unavailable
+          example: ok
+        port:
+          type: string
+          example: "9091"
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: invalid URL

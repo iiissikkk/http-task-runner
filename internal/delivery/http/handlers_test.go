@@ -193,3 +193,51 @@ func TestHandlersHealthzServiceUnavailable(t *testing.T) {
 		t.Fatalf("health status mismatch: got %q, want %q", got, "unavailable")
 	}
 }
+
+func TestHandlersHealthzOk(t *testing.T) {
+	t.Parallel()
+
+	handler := NewHandlers(&mockTaskService{}, mockHealthChecker{pingErr: nil}, "9091")
+	router := NewRouter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code mismatch: got %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+
+	if got, _ := payload["status"].(string); got != "ok" {
+		t.Fatalf("health status mismatch: got %q, want %q", got, "ok")
+	}
+}
+
+func TestHandlersHealthzNoCheckerUnavailable(t *testing.T) {
+	t.Parallel()
+
+	handler := NewHandlers(&mockTaskService{}, nil, "9091")
+	router := NewRouter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status code mismatch: got %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+
+	if got, _ := payload["status"].(string); got != "unavailable" {
+		t.Fatalf("health status mismatch: got %q, want %q", got, "unavailable")
+	}
+}
