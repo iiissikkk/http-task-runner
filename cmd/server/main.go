@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	stdhttp "net/http"
 	"os"
 	"os/signal"
@@ -13,14 +12,26 @@ import (
 	"todoapp/internal/config"
 	delivery "todoapp/internal/delivery/http"
 	"todoapp/internal/repository/postgres"
-	"todoapp/internal/usecase/task"
+	service "todoapp/internal/usecase/task"
+
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
+	logger := logrus.New()
+
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println("failed to load config:", err)
+		logger.WithError(err).Error("failed to load config")
 		return
+	}
+
+	logger.SetLevel(cfg.LogLevel)
+	switch cfg.LogFormat {
+	case "json":
+		logger.SetFormatter(&logrus.JSONFormatter{})
+	default:
+		logger.SetFormatter(&logrus.TextFormatter{})
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -28,7 +39,7 @@ func main() {
 
 	pool, err := postgres.NewPool(context.Background(), cfg.DatabaseURL)
 	if err != nil {
-		fmt.Println("failed to connect to postgres:", err)
+		logger.WithError(err).Error("failed to connect to postgres")
 		return
 	}
 	defer pool.Close()
@@ -36,7 +47,7 @@ func main() {
 	store := postgres.NewStore(pool)
 	httpExecutor := executor.NewHTTPExecutor(cfg.HTTPExecutorTimeout)
 	taskService := service.NewService(store, httpExecutor, store)
-	handlers := delivery.NewHandlers(taskService, store, cfg.HTTPPort)
+	handlers := delivery.NewHandlers(taskService, store, cfg.HTTPPort, logger)
 	router := delivery.NewRouter(handlers)
 
 	server := delivery.NewServer(delivery.ServerConfig{
@@ -48,6 +59,7 @@ func main() {
 	})
 
 	errCh := make(chan error, 1)
+	logger.WithField("addr", cfg.HTTPAddr).Info("starting http server")
 	go func() {
 		errCh <- server.Start()
 	}()
@@ -55,22 +67,22 @@ func main() {
 	select {
 	case err = <-errCh:
 		if err != nil && !errors.Is(err, stdhttp.ErrServerClosed) {
-			fmt.Println("failed to start http server:", err)
+			logger.WithError(err).Error("failed to start http server")
 		}
 		return
 	case <-ctx.Done():
-		fmt.Println("shutdown signal received")
+		logger.Info("shutdown signal received")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTPShutdownTimeout)
 	defer cancel()
 
 	if err = server.Shutdown(shutdownCtx); err != nil {
-		fmt.Println("failed to shutdown http server gracefully:", err)
+		logger.WithError(err).Error("failed to shutdown http server gracefully")
 		return
 	}
 
 	if err = <-errCh; err != nil && !errors.Is(err, stdhttp.ErrServerClosed) {
-		fmt.Println("http server stopped with error:", err)
+		logger.WithError(err).Error("http server stopped with error")
 	}
 }
