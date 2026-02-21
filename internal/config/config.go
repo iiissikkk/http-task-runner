@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -19,6 +20,8 @@ const (
 	defaultHTTPWriteTimeout    = 10 * time.Second
 	defaultHTTPIdleTimeout     = 60 * time.Second
 	defaultHTTPShutdownTimeout = 10 * time.Second
+	defaultLogLevel            = "debug"
+	defaultLogFormat           = "json"
 )
 
 type Config struct {
@@ -30,6 +33,8 @@ type Config struct {
 	HTTPWriteTimeout    time.Duration
 	HTTPIdleTimeout     time.Duration
 	HTTPShutdownTimeout time.Duration
+	LogLevel            logrus.Level
+	LogFormat           string
 }
 
 func Load() (Config, error) {
@@ -67,6 +72,16 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	logLevel, err := getLogLevelEnv("LOG_LEVEL", defaultLogLevel)
+	if err != nil {
+		return Config{}, err
+	}
+
+	logFormat, err := getLogFormatEnv("LOG_FORMAT", defaultLogFormat)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		DatabaseURL:         databaseURL,
 		HTTPAddr:            getEnv("HTTP_ADDR", defaultHTTPAddr),
@@ -76,6 +91,8 @@ func Load() (Config, error) {
 		HTTPWriteTimeout:    writeTimeout,
 		HTTPIdleTimeout:     idleTimeout,
 		HTTPShutdownTimeout: shutdownTimeout,
+		LogLevel:            logLevel,
+		LogFormat:           logFormat,
 	}, nil
 }
 
@@ -154,4 +171,36 @@ func loadDotEnv(path string) error {
 	}
 
 	return nil
+}
+
+func getLogLevelEnv(key, def string) (logrus.Level, error) {
+	raw := getEnv(key, def)
+	s := strings.ToLower(strings.TrimSpace(raw))
+
+	if s == "warning" {
+		s = "warn"
+	}
+
+	switch s {
+	case "debug", "info", "warn", "error":
+		lvl, err := logrus.ParseLevel(s)
+		if err != nil {
+			return 0, fmt.Errorf("%s=%q: %w", key, raw, err)
+		}
+		return lvl, nil
+	default:
+		return 0, fmt.Errorf("invalid %s=%q (allowed: debug|info|warn|error)", key, raw)
+	}
+}
+
+func getLogFormatEnv(key, def string) (string, error) {
+	raw := getEnv(key, def)
+	s := strings.ToLower(strings.TrimSpace(raw))
+
+	switch s {
+	case "text", "json":
+		return s, nil
+	default:
+		return "", fmt.Errorf("invalid %s=%q (allowed: text|json)", key, raw)
+	}
 }
