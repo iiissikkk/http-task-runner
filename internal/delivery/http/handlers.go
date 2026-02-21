@@ -53,15 +53,12 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var req createTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		status := http.StatusBadRequest
-		h.logError("/task", "", status, "invalid create task request body", err)
+		h.logError(r, "", status, "invalid create task request body", err)
 		writeJSON(w, status, errorResponse{Error: err.Error()})
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":    r.Method + " " + r.URL.Path,
-		"http_method": r.Method,
-	}).Info("create task request received")
+	h.logEntry(r, nil).Info("create task request received")
 
 	id, err := h.service.CreateTask(r.Context(), service.CreateInput{
 		Method:  req.Method,
@@ -70,15 +67,14 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		status := mapDomainErrorToStatus(err)
-		h.logError("/task", "", status, "failed to create task", err)
+		h.logError(r, "", status, "failed to create task", err)
 		writeJSON(w, status, errorResponse{Error: err.Error()})
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint": r.Method + " " + r.URL.Path,
-		"task_id":  id,
-		"status":   http.StatusOK,
+	h.logEntry(r, logrus.Fields{
+		"task_id": id,
+		"status":  http.StatusOK,
 	}).Info("task created")
 
 	writeJSON(w, http.StatusOK, createTaskResponse{ID: id})
@@ -88,28 +84,24 @@ func (h *Handlers) GetTask(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	if id == "" {
 		status := http.StatusBadRequest
-		h.logError("/task/{id}", "", status, "invalid task id in path", nil)
+		h.logError(r, "", status, "invalid task id in path", nil)
 		writeJSON(w, status, errorResponse{Error: "invalid task id in path"})
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint": r.Method + " " + r.URL.Path,
-		"task_id":  id,
-	}).Info("get task request received")
+	h.logEntry(r, nil).Info("get task request received")
 
 	item, err := h.service.GetTask(r.Context(), id)
 	if err != nil {
 		status := mapDomainErrorToStatus(err)
-		h.logError("/task/{id}", id, status, "failed to get task", err)
+		h.logError(r, id, status, "failed to get task", err)
 		writeJSON(w, status, errorResponse{Error: err.Error()})
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint": r.Method + " " + r.URL.Path,
-		"task_id":  id,
-		"status":   http.StatusOK,
+	h.logEntry(r, logrus.Fields{
+		"task_id": id,
+		"status":  http.StatusOK,
 	}).Info("get task")
 
 	writeJSON(w, http.StatusOK, getTaskResponse{
@@ -122,14 +114,12 @@ func (h *Handlers) GetTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GetAllTasks(w http.ResponseWriter, r *http.Request) {
-	h.logger.WithFields(logrus.Fields{
-		"endpoint": r.Method + " " + r.URL.Path,
-	}).Info("get all tasks request received")
+	h.logEntry(r, nil).Info("get all tasks request received")
 
 	tasks, err := h.service.GetAllTasks(r.Context())
 	if err != nil {
 		status := mapDomainErrorToStatus(err)
-		h.logError("/tasks", "", status, "failed to list tasks", err)
+		h.logError(r, "", status, "failed to list tasks", err)
 		writeJSON(w, status, errorResponse{Error: err.Error()})
 		return
 	}
@@ -145,10 +135,9 @@ func (h *Handlers) GetAllTasks(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint": r.Method + " " + r.URL.Path,
-		"status":   http.StatusOK,
-		"count":    len(tasks),
+	h.logEntry(r, logrus.Fields{
+		"count":  len(tasks),
+		"status": http.StatusOK,
 	}).Info("tasks listed")
 
 	writeJSON(w, http.StatusOK, getAllTasksResponse{Tasks: resp})
@@ -158,28 +147,24 @@ func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	if id == "" {
 		status := http.StatusBadRequest
-		h.logError("/task/{id}", "", status, "invalid task id in path", nil)
+		h.logError(r, "", status, "invalid task id in path", nil)
 		writeJSON(w, status, errorResponse{Error: "invalid task id in path"})
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint": r.Method + " " + r.URL.Path,
-		"task_id":  id,
-	}).Info("delete task request received")
+	h.logEntry(r, nil).Info("delete task request received")
 
 	item, err := h.service.DeleteTask(r.Context(), id)
 	if err != nil {
 		status := mapDomainErrorToStatus(err)
-		h.logError("/task/{id}", id, status, "failed to delete task", err)
+		h.logError(r, id, status, "failed to delete task", err)
 		writeJSON(w, status, errorResponse{Error: err.Error()})
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint": r.Method + " " + r.URL.Path,
-		"task_id":  id,
-		"status":   http.StatusOK,
+	h.logEntry(r, logrus.Fields{
+		"task_id": id,
+		"status":  http.StatusOK,
 	}).Info("delete task")
 
 	writeJSON(w, http.StatusOK, deleteTaskResponse{
@@ -191,7 +176,7 @@ func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
 	if h.healthChecker == nil {
 		status := http.StatusServiceUnavailable
-		h.logError("/healthz", "", status, "health checker is unavailable", nil)
+		h.logError(r, "", status, "health checker is unavailable", nil)
 		writeJSON(w, status, getHealthStatus{
 			Status: "unavailable",
 			Port:   h.port,
@@ -204,7 +189,7 @@ func (h *Handlers) Healthz(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.healthChecker.Ping(ctx); err != nil {
 		status := http.StatusServiceUnavailable
-		h.logError("/healthz", "", status, "health checker ping failed", err)
+		h.logError(r, "", status, "health checker ping failed", err)
 		writeJSON(w, status, getHealthStatus{
 			Status: "unavailable",
 			Port:   h.port,
@@ -232,16 +217,27 @@ func mapDomainErrorToStatus(err error) int {
 	}
 }
 
-func (h *Handlers) logError(endpoint, taskID string, status int, message string, err error) {
+func (h *Handlers) logEntry(r *http.Request, extra logrus.Fields) *logrus.Entry {
 	fields := logrus.Fields{
-		"endpoint": endpoint,
-		"status":   status,
+		"endpoint":    r.Method + " " + r.URL.Path,
+		"http_method": r.Method,
+		"path":        r.URL.Path,
+	}
+	for k, v := range extra {
+		fields[k] = v
+	}
+	return h.logger.WithFields(fields)
+}
+
+func (h *Handlers) logError(r *http.Request, taskID string, status int, message string, err error) {
+	fields := logrus.Fields{
+		"status": status,
 	}
 	if taskID != "" {
 		fields["task_id"] = taskID
 	}
 
-	entry := h.logger.WithFields(fields)
+	entry := h.logEntry(r, fields)
 	if err != nil {
 		entry = entry.WithError(err)
 	}
