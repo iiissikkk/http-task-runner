@@ -1,7 +1,0 @@
-package: docs
-output: cmd/docs/oapi.gen.go
-generate:
-  models: true
-  embedded-spec: true
-output-options:
-  skip-prune: true

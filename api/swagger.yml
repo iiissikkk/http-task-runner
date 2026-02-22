@@ -9,6 +9,7 @@ servers:
 paths:
   /task:
     post:
+      operationId: CreateTask
       tags:
         - tasks
       summary: Create task
@@ -40,6 +41,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /tasks:
     get:
+      operationId: GetAllTasks
       tags:
         - tasks
       summary: Get all tasks
@@ -59,6 +61,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /task/{id}:
     get:
+      operationId: GetTask
       tags:
         - tasks
       summary: Get task by ID
@@ -95,6 +98,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     delete:
+      operationId: DeleteTask
       tags:
         - tasks
       summary: Delete task by ID
@@ -132,6 +136,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /healthz:
     get:
+      operationId: Healthz
       tags:
         - health
       summary: Health check

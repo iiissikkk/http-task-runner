@@ -122,13 +122,15 @@ make test
 ## OAPI Codegen
 
 Источник OpenAPI схемы:
-- `cmd/docs/swagger.yml`
+- `api/swagger.yml`
 
-Генерация Go-кода (models + embedded spec):
+Генерация Go-кода (models + server + embedded spec):
 
 ```bash
 make oapi-gen
 ```
 
-Сгенерированный файл появится в:
-- `cmd/docs/oapi.gen.go`
+Сгенерированные файлы появятся в:
+- `internal/delivery/http/openapi/types.gen.go`
+- `internal/delivery/http/openapi/server.gen.go`
+- `internal/delivery/http/openapi/spec.gen.go`
