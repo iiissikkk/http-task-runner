@@ -37,14 +37,19 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := postgres.NewPool(context.Background(), cfg.DatabaseURL)
+	db, sqlDB, err := postgres.NewPool(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		logger.WithError(err).Error("failed to connect to postgres")
 		return
 	}
-	defer pool.Close()
+	defer sqlDB.Close()
 
-	store := postgres.NewStore(pool)
+	if err = postgres.RunMigrations(context.Background(), db); err != nil {
+		logger.WithError(err).Error("failed to run migrations on startup")
+		return
+	}
+
+	store := postgres.NewStore(db)
 	httpExecutor := executor.NewHTTPExecutor(cfg.HTTPExecutorTimeout)
 	taskService := service.NewService(store, httpExecutor, store)
 	handlers := delivery.NewHandlers(taskService, store, cfg.HTTPPort, logger)
