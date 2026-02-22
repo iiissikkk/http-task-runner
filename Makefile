@@ -38,5 +38,21 @@ oapi-gen:
 		-w /work \
 		app \
 		go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 \
-		-config cmd/docs/oapi-codegen.yaml \
-		cmd/docs/swagger.yml
+		-config api/oapi-codegen.types.yaml \
+		api/swagger.yml
+	$(COMPOSE) run --rm --no-deps \
+		--user "$$(id -u):$$(id -g)" \
+		-v "$(PWD):/work" \
+		-w /work \
+		app \
+		go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 \
+		-config api/oapi-codegen.server.yaml \
+		api/swagger.yml
+	$(COMPOSE) run --rm --no-deps \
+		--user "$$(id -u):$$(id -g)" \
+		-v "$(PWD):/work" \
+		-w /work \
+		app \
+		go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1 \
+		-config api/oapi-codegen.spec.yaml \
+		api/swagger.yml
