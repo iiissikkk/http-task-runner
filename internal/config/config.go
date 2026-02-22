@@ -3,11 +3,11 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sirupsen/logrus"
 )
 
@@ -102,8 +102,15 @@ func validateDatabaseURL(raw string) error {
 		return errors.New("DATABASE_URL is required")
 	}
 
-	if _, err := pgxpool.ParseConfig(dsn); err != nil {
+	u, err := url.Parse(dsn)
+	if err != nil {
 		return fmt.Errorf("invalid DATABASE_URL: %w", err)
+	}
+	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return fmt.Errorf("invalid DATABASE_URL: unsupported scheme %q", u.Scheme)
+	}
+	if strings.TrimSpace(u.Host) == "" {
+		return errors.New("invalid DATABASE_URL: host is required")
 	}
 
 	return nil

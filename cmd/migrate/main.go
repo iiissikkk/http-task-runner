@@ -28,12 +28,12 @@ func main() {
 		logger.SetFormatter(&logrus.TextFormatter{})
 	}
 
-	pool, err := postgres.NewPool(context.Background(), cfg.DatabaseURL)
+	db, sqlDB, err := postgres.NewPool(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		logger.WithError(err).Error("failed to connect to postgres")
 		os.Exit(1)
 	}
-	defer pool.Close()
+	defer sqlDB.Close()
 
 	mode := "up"
 	if len(os.Args) > 1 {
@@ -42,13 +42,13 @@ func main() {
 
 	switch mode {
 	case "up":
-		if err = postgres.RunMigrations(context.Background(), pool); err != nil {
+		if err = postgres.RunMigrations(context.Background(), db); err != nil {
 			logger.WithError(err).Error("failed to run migrations")
 			os.Exit(1)
 		}
 		logger.Info("migrations applied")
 	case "down":
-		if err = postgres.RollbackLastMigration(context.Background(), pool); err != nil {
+		if err = postgres.RollbackLastMigration(context.Background(), db); err != nil {
 			if errors.Is(err, postgres.ErrNoAppliedMigrations) {
 				logger.Info("no applied migrations to rollback")
 				return
@@ -56,7 +56,7 @@ func main() {
 			logger.WithError(err).Error("failed to rollback migration")
 			os.Exit(1)
 		}
-		logger.Info("last migration rolled back")
+		logger.Info("tasks table dropped")
 	default:
 		logger.Error("unknown mode, use: up or down")
 		os.Exit(1)
