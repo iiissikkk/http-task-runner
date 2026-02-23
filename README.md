@@ -119,6 +119,25 @@ curl -s http://localhost:9091/swagger/index.html
 make test
 ```
 
+Команды:
+
+```bash
+# unit / mock тесты
+make test-unit
+
+# все интеграционные тесты
+make test-integration
+
+# только интеграционные тесты store
+make test-integration-store
+
+# только интеграционные тесты HTTP router
+make test-integration-http
+
+# unit + integration
+make test-all
+```
+
 ## OAPI Codegen
 
 Источник OpenAPI схемы:

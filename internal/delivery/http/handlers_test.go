@@ -74,6 +74,8 @@ func TestHandlersCreateTask(t *testing.T) {
 		body            string
 		createTaskFn    func(ctx context.Context, input service.CreateInput) (string, error)
 		wantStatus      int
+		wantContentType string
+		wantJSONBody    bool
 		wantID          string
 		wantErrorSubstr string
 	}{
@@ -89,13 +91,16 @@ func TestHandlersCreateTask(t *testing.T) {
 				}
 				return "task-1", nil
 			},
-			wantStatus: http.StatusOK,
-			wantID:     "task-1",
+			wantStatus:      http.StatusOK,
+			wantContentType: "application/json",
+			wantJSONBody:    true,
+			wantID:          "task-1",
 		},
 		{
-			name:       "invalid json",
-			body:       `{"method":"GET","url":"https://example.com"`,
-			wantStatus: http.StatusBadRequest,
+			name:            "invalid json",
+			body:            `{"method":"GET","url":"https://example.com"`,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: "text/plain; charset=utf-8",
 		},
 		{
 			name: "domain error maps to bad request",
@@ -104,6 +109,8 @@ func TestHandlersCreateTask(t *testing.T) {
 				return "", task.ErrInvalidMethod
 			},
 			wantStatus:      http.StatusBadRequest,
+			wantContentType: "application/json",
+			wantJSONBody:    true,
 			wantErrorSubstr: task.ErrInvalidMethod.Error(),
 		},
 	}
@@ -124,8 +131,12 @@ func TestHandlersCreateTask(t *testing.T) {
 				t.Fatalf("status code mismatch: got %d, want %d", rec.Code, tc.wantStatus)
 			}
 
-			if got := rec.Header().Get("Content-Type"); got != "application/json" {
-				t.Fatalf("content-type mismatch: got %q, want %q", got, "application/json")
+			if got := rec.Header().Get("Content-Type"); got != tc.wantContentType {
+				t.Fatalf("content-type mismatch: got %q, want %q", got, tc.wantContentType)
+			}
+
+			if !tc.wantJSONBody {
+				return
 			}
 
 			var payload map[string]any
