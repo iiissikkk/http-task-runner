@@ -35,7 +35,7 @@ func newStoreIntegrationEnv(t *testing.T) *storeIntegrationEnv {
 
 	container, err := tcpostgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		"postgres:17-alpine",
 		tcpostgres.WithDatabase("todoapp_test"),
 		tcpostgres.WithUsername("postgres"),
 		tcpostgres.WithPassword("postgres"),

@@ -16,13 +16,22 @@ test-unit:
 	$(COMPOSE) run --rm app go test ./...
 
 test-integration:
-	go test -tags=integration ./internal/repository/postgres ./internal/delivery/http -v
+	$(COMPOSE) run --rm --no-deps \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-e DOCKER_HOST=unix:///var/run/docker.sock \
+		app go test -tags=integration ./internal/repository/postgres ./internal/delivery/http -v
 
 test-integration-store:
-	go test -tags=integration ./internal/repository/postgres -v
+	$(COMPOSE) run --rm --no-deps \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-e DOCKER_HOST=unix:///var/run/docker.sock \
+		app go test -tags=integration ./internal/repository/postgres -v
 
 test-integration-http:
-	go test -tags=integration ./internal/delivery/http -v
+	$(COMPOSE) run --rm --no-deps \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-e DOCKER_HOST=unix:///var/run/docker.sock \
+		app go test -tags=integration ./internal/delivery/http -v
 
 test-all: test-unit test-integration
 
@@ -47,6 +56,10 @@ ps:
 oapi-gen:
 	$(COMPOSE) run --rm --no-deps \
 		--user "$$(id -u):$$(id -g)" \
+		-e GOPATH=/work/.cache/gopath \
+		-e GOMODCACHE=/work/.cache/gopath/pkg/mod \
+		-e GOCACHE=/work/.cache/gocache \
+		-e HOME=/tmp \
 		-v "$(PWD):/work" \
 		-w /work \
 		app \
@@ -55,6 +68,10 @@ oapi-gen:
 		api/swagger.yml
 	$(COMPOSE) run --rm --no-deps \
 		--user "$$(id -u):$$(id -g)" \
+		-e GOPATH=/work/.cache/gopath \
+		-e GOMODCACHE=/work/.cache/gopath/pkg/mod \
+		-e GOCACHE=/work/.cache/gocache \
+		-e HOME=/tmp \
 		-v "$(PWD):/work" \
 		-w /work \
 		app \
@@ -63,6 +80,10 @@ oapi-gen:
 		api/swagger.yml
 	$(COMPOSE) run --rm --no-deps \
 		--user "$$(id -u):$$(id -g)" \
+		-e GOPATH=/work/.cache/gopath \
+		-e GOMODCACHE=/work/.cache/gopath/pkg/mod \
+		-e GOCACHE=/work/.cache/gocache \
+		-e HOME=/tmp \
 		-v "$(PWD):/work" \
 		-w /work \
 		app \

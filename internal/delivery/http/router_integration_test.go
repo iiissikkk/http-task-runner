@@ -27,11 +27,10 @@ import (
 )
 
 type routerIntegrationEnv struct {
-	router    http.Handler
-	store     *postgresrepo.Store
-	db        *gorm.DB
-	executor  *threadSafeFakeExecutor
-	closeDBFn func() error
+	router   http.Handler
+	store    *postgresrepo.Store
+	db       *gorm.DB
+	executor *threadSafeFakeExecutor
 }
 
 func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *routerIntegrationEnv {
@@ -49,7 +48,7 @@ func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *ro
 
 	container, err := tcpostgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		"postgres:17-alpine",
 		tcpostgres.WithDatabase("todoapp_test"),
 		tcpostgres.WithUsername("postgres"),
 		tcpostgres.WithPassword("postgres"),
@@ -100,11 +99,10 @@ func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *ro
 	handlers := NewHandlers(svc, store, "9091", newTestLogger())
 
 	env := &routerIntegrationEnv{
-		router:    NewRouter(handlers),
-		store:     store,
-		db:        gormDB,
-		executor:  executor,
-		closeDBFn: sqlDB.Close,
+		router:   NewRouter(handlers),
+		store:    store,
+		db:       gormDB,
+		executor: executor,
 	}
 	env.resetTasks(t)
 
