@@ -4,7 +4,7 @@ import (
 	"net/http"
 )
 
-const swaggerSpecPath = "cmd/docs/swagger.yml"
+const swaggerSpecPath = "api/swagger.yml"
 
 func SwaggerSpec(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/yaml")

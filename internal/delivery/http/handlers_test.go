@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,8 @@ import (
 
 	"todoapp/internal/domain/task"
 	service "todoapp/internal/usecase/task"
+
+	"github.com/sirupsen/logrus"
 )
 
 type mockTaskService struct {
@@ -57,6 +60,12 @@ func (m mockHealthChecker) Ping(_ context.Context) error {
 	return m.pingErr
 }
 
+func newTestLogger() *logrus.Logger {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	return logger
+}
+
 func TestHandlersCreateTask(t *testing.T) {
 	t.Parallel()
 
@@ -65,6 +74,8 @@ func TestHandlersCreateTask(t *testing.T) {
 		body            string
 		createTaskFn    func(ctx context.Context, input service.CreateInput) (string, error)
 		wantStatus      int
+		wantContentType string
+		wantJSONBody    bool
 		wantID          string
 		wantErrorSubstr string
 	}{
@@ -80,13 +91,16 @@ func TestHandlersCreateTask(t *testing.T) {
 				}
 				return "task-1", nil
 			},
-			wantStatus: http.StatusOK,
-			wantID:     "task-1",
+			wantStatus:      http.StatusOK,
+			wantContentType: "application/json",
+			wantJSONBody:    true,
+			wantID:          "task-1",
 		},
 		{
-			name:       "invalid json",
-			body:       `{"method":"GET","url":"https://example.com"`,
-			wantStatus: http.StatusBadRequest,
+			name:            "invalid json",
+			body:            `{"method":"GET","url":"https://example.com"`,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: "text/plain; charset=utf-8",
 		},
 		{
 			name: "domain error maps to bad request",
@@ -95,6 +109,8 @@ func TestHandlersCreateTask(t *testing.T) {
 				return "", task.ErrInvalidMethod
 			},
 			wantStatus:      http.StatusBadRequest,
+			wantContentType: "application/json",
+			wantJSONBody:    true,
 			wantErrorSubstr: task.ErrInvalidMethod.Error(),
 		},
 	}
@@ -104,7 +120,7 @@ func TestHandlersCreateTask(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := NewHandlers(&mockTaskService{createTaskFn: tc.createTaskFn}, nil, "9091")
+			handler := NewHandlers(&mockTaskService{createTaskFn: tc.createTaskFn}, nil, "9091", newTestLogger())
 			router := NewRouter(handler)
 
 			req := httptest.NewRequest(http.MethodPost, "/task", bytes.NewBufferString(tc.body))
@@ -115,8 +131,12 @@ func TestHandlersCreateTask(t *testing.T) {
 				t.Fatalf("status code mismatch: got %d, want %d", rec.Code, tc.wantStatus)
 			}
 
-			if got := rec.Header().Get("Content-Type"); got != "application/json" {
-				t.Fatalf("content-type mismatch: got %q, want %q", got, "application/json")
+			if got := rec.Header().Get("Content-Type"); got != tc.wantContentType {
+				t.Fatalf("content-type mismatch: got %q, want %q", got, tc.wantContentType)
+			}
+
+			if !tc.wantJSONBody {
+				return
 			}
 
 			var payload map[string]any
@@ -148,7 +168,7 @@ func TestHandlersGetTaskNotFound(t *testing.T) {
 		getTaskFn: func(_ context.Context, _ string) (task.Task, error) {
 			return task.Task{}, task.ErrTaskNotFound
 		},
-	}, nil, "9091")
+	}, nil, "9091", newTestLogger())
 	router := NewRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/task/missing-id", nil)
@@ -173,7 +193,7 @@ func TestHandlersGetTaskNotFound(t *testing.T) {
 func TestHandlersHealthzServiceUnavailable(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandlers(&mockTaskService{}, mockHealthChecker{pingErr: errors.New("db is down")}, "9091")
+	handler := NewHandlers(&mockTaskService{}, mockHealthChecker{pingErr: errors.New("db is down")}, "9091", newTestLogger())
 	router := NewRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -197,7 +217,7 @@ func TestHandlersHealthzServiceUnavailable(t *testing.T) {
 func TestHandlersHealthzOk(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandlers(&mockTaskService{}, mockHealthChecker{pingErr: nil}, "9091")
+	handler := NewHandlers(&mockTaskService{}, mockHealthChecker{pingErr: nil}, "9091", newTestLogger())
 	router := NewRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -221,7 +241,7 @@ func TestHandlersHealthzOk(t *testing.T) {
 func TestHandlersHealthzNoCheckerUnavailable(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandlers(&mockTaskService{}, nil, "9091")
+	handler := NewHandlers(&mockTaskService{}, nil, "9091", newTestLogger())
 	router := NewRouter(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

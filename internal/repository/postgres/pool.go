@@ -2,33 +2,38 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-func NewPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+func NewPool(ctx context.Context, databaseURL string) (*gorm.DB, *sql.DB, error) {
 	dsn := strings.TrimSpace(databaseURL)
 	if dsn == "" {
-		return nil, errors.New("database url is required")
+		return nil, nil, errors.New("database url is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	cfg, err := pgxpool.ParseConfig(dsn)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("parse pgx pool config: %w", err)
+		return nil, nil, fmt.Errorf("open gorm connection: %w", err)
 	}
 
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	sqlDB, err := db.DB()
 	if err != nil {
-		return nil, fmt.Errorf("create pgx pool: %w", err)
+		return nil, nil, fmt.Errorf("get sql db from gorm: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("ping postgres: %w", err)
+	if err = sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		return nil, nil, fmt.Errorf("ping postgres: %w", err)
 	}
 
-	return pool, nil
+	return db, sqlDB, nil
 }

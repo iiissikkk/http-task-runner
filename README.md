@@ -27,6 +27,8 @@
 - `HTTP_SERVER_WRITE_TIMEOUT`
 - `HTTP_SERVER_IDLE_TIMEOUT`
 - `HTTP_SHUTDOWN_TIMEOUT`
+- `LOG_LEVEL`
+- `LOG_FORMAT`
 
 ## Запуск локально
 
@@ -36,13 +38,7 @@
 make up
 ```
 
-2. Примените миграции (вручную, не на старте приложения):
-
-```bash
-make migrate-up
-```
-
-3. Проверить состояние контейнеров:
+2. Проверить состояние контейнеров:
 
 ```bash
 make ps
@@ -50,17 +46,12 @@ make ps
 
 ## Миграции
 
-Применить:
+При старте приложения миграции применяются автоматически через GORM `AutoMigrate`.
 
-```bash
-make migrate-up
-```
+Дополнительно доступны команды:
 
-Откатить последнюю примененную:
-
-```bash
-make migrate-down
-```
+- Применить вручную: `make migrate-up`
+- Откатить (удаляет таблицу `tasks`): `make migrate-down`
 
 ## Docker
 
@@ -128,16 +119,37 @@ curl -s http://localhost:9091/swagger/index.html
 make test
 ```
 
+Команды:
+
+```bash
+# unit / mock тесты
+make test-unit
+
+# все интеграционные тесты
+make test-integration
+
+# только интеграционные тесты store
+make test-integration-store
+
+# только интеграционные тесты HTTP router
+make test-integration-http
+
+# unit + integration
+make test-all
+```
+
 ## OAPI Codegen
 
 Источник OpenAPI схемы:
-- `cmd/docs/swagger.yml`
+- `api/swagger.yml`
 
-Генерация Go-кода (models + embedded spec):
+Генерация Go-кода (models + server + embedded spec):
 
 ```bash
 make oapi-gen
 ```
 
-Сгенерированный файл появится в:
-- `cmd/docs/oapi.gen.go`
+Сгенерированные файлы появятся в:
+- `internal/delivery/http/openapi/types.gen.go`
+- `internal/delivery/http/openapi/server.gen.go`
+- `internal/delivery/http/openapi/spec.gen.go`
