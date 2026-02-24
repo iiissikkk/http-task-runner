@@ -8,13 +8,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"todoapp/internal/domain/task"
 	service "todoapp/internal/usecase/task"
 
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 )
 
 type mockTaskService struct {
@@ -127,35 +127,25 @@ func TestHandlersCreateTask(t *testing.T) {
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
-			if rec.Code != tc.wantStatus {
-				t.Fatalf("status code mismatch: got %d, want %d", rec.Code, tc.wantStatus)
-			}
-
-			if got := rec.Header().Get("Content-Type"); got != tc.wantContentType {
-				t.Fatalf("content-type mismatch: got %q, want %q", got, tc.wantContentType)
-			}
+			require.Equal(t, tc.wantStatus, rec.Code, "status code mismatch")
+			require.Equal(t, tc.wantContentType, rec.Header().Get("Content-Type"), "content-type mismatch")
 
 			if !tc.wantJSONBody {
 				return
 			}
 
 			var payload map[string]any
-			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-				t.Fatalf("failed to decode response body: %v", err)
-			}
+			err := json.Unmarshal(rec.Body.Bytes(), &payload)
+			require.NoError(t, err, "failed to decode response body")
 
 			if tc.wantID != "" {
 				gotID, _ := payload["id"].(string)
-				if gotID != tc.wantID {
-					t.Fatalf("id mismatch: got %q, want %q", gotID, tc.wantID)
-				}
+				require.Equal(t, tc.wantID, gotID, "id mismatch")
 			}
 
 			if tc.wantErrorSubstr != "" {
 				gotErr, _ := payload["error"].(string)
-				if !strings.Contains(gotErr, tc.wantErrorSubstr) {
-					t.Fatalf("error mismatch: got %q, want substring %q", gotErr, tc.wantErrorSubstr)
-				}
+				require.Contains(t, gotErr, tc.wantErrorSubstr, "error mismatch")
 			}
 		})
 	}
@@ -175,19 +165,14 @@ func TestHandlersGetTaskNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status code mismatch: got %d, want %d", rec.Code, http.StatusNotFound)
-	}
+	require.Equal(t, http.StatusNotFound, rec.Code, "status code mismatch")
 
 	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response body: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &payload)
+	require.NoError(t, err, "failed to decode response body")
 
 	gotErr, _ := payload["error"].(string)
-	if gotErr != task.ErrTaskNotFound.Error() {
-		t.Fatalf("error mismatch: got %q, want %q", gotErr, task.ErrTaskNotFound.Error())
-	}
+	require.Equal(t, task.ErrTaskNotFound.Error(), gotErr, "error mismatch")
 }
 
 func TestHandlersHealthzServiceUnavailable(t *testing.T) {
@@ -200,18 +185,14 @@ func TestHandlersHealthzServiceUnavailable(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status code mismatch: got %d, want %d", rec.Code, http.StatusServiceUnavailable)
-	}
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "status code mismatch")
 
 	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response body: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &payload)
+	require.NoError(t, err, "failed to decode response body")
 
-	if got, _ := payload["status"].(string); got != "unavailable" {
-		t.Fatalf("health status mismatch: got %q, want %q", got, "unavailable")
-	}
+	got, _ := payload["status"].(string)
+	require.Equal(t, "unavailable", got, "health status mismatch")
 }
 
 func TestHandlersHealthzOk(t *testing.T) {
@@ -224,18 +205,14 @@ func TestHandlersHealthzOk(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status code mismatch: got %d, want %d", rec.Code, http.StatusOK)
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "status code mismatch")
 
 	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response body: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &payload)
+	require.NoError(t, err, "failed to decode response body")
 
-	if got, _ := payload["status"].(string); got != "ok" {
-		t.Fatalf("health status mismatch: got %q, want %q", got, "ok")
-	}
+	got, _ := payload["status"].(string)
+	require.Equal(t, "ok", got, "health status mismatch")
 }
 
 func TestHandlersHealthzNoCheckerUnavailable(t *testing.T) {
@@ -248,16 +225,12 @@ func TestHandlersHealthzNoCheckerUnavailable(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status code mismatch: got %d, want %d", rec.Code, http.StatusServiceUnavailable)
-	}
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "status code mismatch")
 
 	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response body: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &payload)
+	require.NoError(t, err, "failed to decode response body")
 
-	if got, _ := payload["status"].(string); got != "unavailable" {
-		t.Fatalf("health status mismatch: got %q, want %q", got, "unavailable")
-	}
+	got, _ := payload["status"].(string)
+	require.Equal(t, "unavailable", got, "health status mismatch")
 }

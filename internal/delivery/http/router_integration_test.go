@@ -39,9 +39,7 @@ func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *ro
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
-	if executor == nil {
-		t.Fatalf("executor is nil")
-	}
+	require.NotNil(t, executor, "executor is nil")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	t.Cleanup(cancel)
@@ -63,9 +61,7 @@ func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *ro
 			}).WithStartupTimeout(3*time.Minute),
 		),
 	)
-	if err != nil {
-		t.Fatalf("start postgres container: %v", err)
-	}
+	require.NoError(t, err, "start postgres container")
 
 	t.Cleanup(func() {
 		terminateCtx, terminateCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -76,23 +72,18 @@ func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *ro
 	})
 
 	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("build postgres dsn: %v", err)
-	}
+	require.NoError(t, err, "build postgres dsn")
 
 	gormDB, sqlDB, err := postgresrepo.NewPool(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect to postgres: %v", err)
-	}
+	require.NoError(t, err, "connect to postgres")
 	t.Cleanup(func() {
 		if err := sqlDB.Close(); err != nil {
 			t.Logf("close sql db: %v", err)
 		}
 	})
 
-	if err := postgresrepo.RunMigrations(ctx, gormDB); err != nil {
-		t.Fatalf("run migrations: %v", err)
-	}
+	err = postgresrepo.RunMigrations(ctx, gormDB)
+	require.NoError(t, err, "run migrations")
 
 	store := postgresrepo.NewStore(gormDB)
 	svc := taskservice.NewService(store, executor, store)
@@ -112,9 +103,8 @@ func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *ro
 func (e *routerIntegrationEnv) resetTasks(t *testing.T) {
 	t.Helper()
 
-	if err := e.db.Exec("TRUNCATE TABLE tasks").Error; err != nil {
-		t.Fatalf("truncate tasks table: %v", err)
-	}
+	err := e.db.Exec("TRUNCATE TABLE tasks").Error
+	require.NoError(t, err, "truncate tasks table")
 }
 
 type executorCall struct {
@@ -200,38 +190,23 @@ func TestRouterIntegration_CreateThenGetTask(t *testing.T) {
 		},
 	})
 
-	if !executor.WaitCalled(2 * time.Second) {
-		t.Fatalf("executor was not called within timeout")
-	}
+	require.True(t, executor.WaitCalled(2*time.Second), "executor was not called within timeout")
 
 	call, ok := executor.LastCall()
-	if !ok {
-		t.Fatalf("executor call was not recorded")
-	}
-	if call.Method != "GET" {
-		t.Fatalf("executor method mismatch: got %q, want %q", call.Method, "GET")
-	}
-	if call.URL != "https://example.com/resource" {
-		t.Fatalf("executor url mismatch: got %q, want %q", call.URL, "https://example.com/resource")
-	}
-	if got, want := call.Headers["Authorization"], "Bearer t"; got != want {
-		t.Fatalf("executor header mismatch: got %q, want %q", got, want)
-	}
+	require.True(t, ok, "executor call was not recorded")
+	require.Equal(t, "GET", call.Method, "executor method mismatch")
+	require.Equal(t, "https://example.com/resource", call.URL, "executor url mismatch")
+	require.Equal(t, "Bearer t", call.Headers["Authorization"], "executor header mismatch")
 
 	getResp := waitForTaskStatus(t, env.router, taskID, httpopenapi.Done, 5*time.Second)
 
-	if getResp.Id == nil || *getResp.Id != taskID {
-		t.Fatalf("get task id mismatch: got %+v, want id %q", getResp.Id, taskID)
-	}
-	if getResp.HttpStatusCode == nil || *getResp.HttpStatusCode != 200 {
-		t.Fatalf("get task httpStatusCode mismatch: got %+v, want %d", getResp.HttpStatusCode, 200)
-	}
-	if getResp.Length == nil || *getResp.Length != 321 {
-		t.Fatalf("get task length mismatch: got %+v, want %d", getResp.Length, 321)
-	}
-	if getResp.Headers == nil {
-		t.Fatalf("get task headers is nil")
-	}
+	require.NotNil(t, getResp.Id, "get task id is nil")
+	require.Equal(t, taskID, *getResp.Id, "get task id mismatch")
+	require.NotNil(t, getResp.HttpStatusCode, "get task httpStatusCode is nil")
+	require.Equal(t, 200, *getResp.HttpStatusCode, "get task httpStatusCode mismatch")
+	require.NotNil(t, getResp.Length, "get task length is nil")
+	require.Equal(t, int64(321), *getResp.Length, "get task length mismatch")
+	require.NotNil(t, getResp.Headers, "get task headers is nil")
 	wantHeaders := map[string][]string{
 		"Content-Type": {"application/json"},
 		"X-Source":     {"fake-executor"},
@@ -265,51 +240,31 @@ func TestRouterIntegration_CreateMultiplyThenGetTasks(t *testing.T) {
 		},
 	})
 
-	if !executor.WaitCalled(2 * time.Second) {
-		t.Fatalf("executor was not called within timeout")
-	}
+	require.True(t, executor.WaitCalled(2*time.Second), "executor was not called within timeout")
 
 	call, ok := executor.LastCall()
-	if !ok {
-		t.Fatalf("executor call was not recorded")
-	}
-	if call.Method != "GET" {
-		t.Fatalf("executor method mismatch: got %q, want %q", call.Method, "GET")
-	}
-	if call.URL != "https://example.com/resource" {
-		t.Fatalf("executor url mismatch: got %q, want %q", call.URL, "https://example.com/resource")
-	}
-	if got, want := call.Headers["Authorization"], "Bearer t"; got != want {
-		t.Fatalf("executor header mismatch: got %q, want %q", got, want)
-	}
+	require.True(t, ok, "executor call was not recorded")
+	require.Equal(t, "GET", call.Method, "executor method mismatch")
+	require.Equal(t, "https://example.com/resource", call.URL, "executor url mismatch")
+	require.Equal(t, "Bearer t", call.Headers["Authorization"], "executor header mismatch")
 
 	_ = waitForTaskStatus(t, env.router, firstTaskID, httpopenapi.Done, 5*time.Second)
 	_ = waitForTaskStatus(t, env.router, secondTaskID, httpopenapi.Done, 5*time.Second)
 
 	getAllResp := mustGetAllTasks(t, env.router)
-	if getAllResp.Tasks == nil {
-		t.Fatalf("get all tasks response has nil tasks")
-	}
-	if len(*getAllResp.Tasks) != 2 {
-		t.Fatalf("tasks count mismatch: got %d, want %d", len(*getAllResp.Tasks), 2)
-	}
+	require.NotNil(t, getAllResp.Tasks, "get all tasks response has nil tasks")
+	require.Len(t, *getAllResp.Tasks, 2, "tasks count mismatch")
 
 	byID := make(map[string]httpopenapi.GetTaskResponse, len(*getAllResp.Tasks))
 	for _, item := range *getAllResp.Tasks {
-		if item.Id == nil {
-			t.Fatalf("task in list has nil id: %+v", item)
-		}
+		require.NotNil(t, item.Id, "task in list has nil id")
 		byID[*item.Id] = item
 	}
 
 	first, ok := byID[firstTaskID]
-	if !ok {
-		t.Fatalf("first task not found in /tasks response: %q", firstTaskID)
-	}
+	require.True(t, ok, "first task not found in /tasks response")
 	second, ok := byID[secondTaskID]
-	if !ok {
-		t.Fatalf("second task not found in /tasks response: %q", secondTaskID)
-	}
+	require.True(t, ok, "second task not found in /tasks response")
 
 	assertListedTaskDone(t, first)
 	assertListedTaskDone(t, second)
@@ -341,43 +296,28 @@ func TestRouterIntegration_CreateThenDeleteTask(t *testing.T) {
 		},
 	})
 
-	if !executor.WaitCalled(2 * time.Second) {
-		t.Fatalf("executor was not called within timeout")
-	}
+	require.True(t, executor.WaitCalled(2*time.Second), "executor was not called within timeout")
 
 	call, ok := executor.LastCall()
-	if !ok {
-		t.Fatalf("executor call was not recorded")
-	}
-	if call.Method != "GET" {
-		t.Fatalf("executor method mismatch: got %q, want %q", call.Method, "GET")
-	}
-	if call.URL != "https://example.com/resource" {
-		t.Fatalf("executor url mismatch: got %q, want %q", call.URL, "https://example.com/resource")
-	}
-	if got, want := call.Headers["Authorization"], "Bearer t"; got != want {
-		t.Fatalf("executor header mismatch: got %q, want %q", got, want)
-	}
+	require.True(t, ok, "executor call was not recorded")
+	require.Equal(t, "GET", call.Method, "executor method mismatch")
+	require.Equal(t, "https://example.com/resource", call.URL, "executor url mismatch")
+	require.Equal(t, "Bearer t", call.Headers["Authorization"], "executor header mismatch")
 
 	_ = waitForTaskStatus(t, env.router, taskID, httpopenapi.Done, 5*time.Second)
 
 	deleteResp := mustDeleteTask(t, env.router, taskID)
-	if deleteResp.Id == nil || *deleteResp.Id != taskID {
-		t.Fatalf("delete task id mismatch: got %+v, want id %q", deleteResp.Id, taskID)
-	}
-	if deleteResp.HttpStatusCode == nil || *deleteResp.HttpStatusCode != 200 {
-		t.Fatalf("delete task httpStatusCode mismatch: got %+v, want %d", deleteResp.HttpStatusCode, 200)
-	}
+	require.NotNil(t, deleteResp.Id, "delete task id is nil")
+	require.Equal(t, taskID, *deleteResp.Id, "delete task id mismatch")
+	require.NotNil(t, deleteResp.HttpStatusCode, "delete task httpStatusCode is nil")
+	require.Equal(t, 200, *deleteResp.HttpStatusCode, "delete task httpStatusCode mismatch")
 
 	getAfterDeleteRec := mustDoRequest(t, env.router, http.MethodGet, "/task/"+taskID, nil)
-	if getAfterDeleteRec.Code != http.StatusNotFound {
-		t.Fatalf("get after delete status mismatch: got %d, want %d; body=%s", getAfterDeleteRec.Code, http.StatusNotFound, getAfterDeleteRec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, getAfterDeleteRec.Code, "get after delete status mismatch: body=%s", getAfterDeleteRec.Body.String())
 
 	errResp := mustDecodeJSON[httpopenapi.ErrorResponse](t, getAfterDeleteRec)
-	if errResp.Error == nil || *errResp.Error != domaintask.ErrTaskNotFound.Error() {
-		t.Fatalf("get after delete error mismatch: got %+v, want %q", errResp.Error, domaintask.ErrTaskNotFound.Error())
-	}
+	require.NotNil(t, errResp.Error, "get after delete error is nil")
+	require.Equal(t, domaintask.ErrTaskNotFound.Error(), *errResp.Error, "get after delete error mismatch")
 }
 
 func waitForTaskStatus(t *testing.T, router http.Handler, id string, want httpopenapi.GetTaskResponseStatus, timeout time.Duration) httpopenapi.GetTaskResponse {
@@ -390,9 +330,7 @@ func waitForTaskStatus(t *testing.T, router http.Handler, id string, want httpop
 	for time.Now().Before(deadline) {
 		rec := mustDoRequest(t, router, http.MethodGet, "/task/"+id, nil)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("unexpected get task status while polling: got %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
-		}
+		require.Equal(t, http.StatusOK, rec.Code, "unexpected get task status while polling: body=%s", rec.Body.String())
 
 		resp := mustDecodeJSON[httpopenapi.GetTaskResponse](t, rec)
 
@@ -407,7 +345,7 @@ func waitForTaskStatus(t *testing.T, router http.Handler, id string, want httpop
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	t.Fatalf("timeout waiting for task %q status %q (last status=%q, last response=%+v)", id, want, lastStatus, lastResp)
+	require.Failf(t, "timeout waiting for task status", "task=%q want=%q last_status=%q last_response=%+v", id, want, lastStatus, lastResp)
 	return httpopenapi.GetTaskResponse{}
 }
 
@@ -415,14 +353,11 @@ func mustCreateTask(t *testing.T, router http.Handler, reqBody httpopenapi.Creat
 	t.Helper()
 
 	rec := mustDoJSONRequest(t, router, http.MethodPost, "/task", reqBody)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("create task status mismatch: got %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "create task status mismatch: body=%s", rec.Body.String())
 
 	resp := mustDecodeJSON[httpopenapi.CreateTaskResponse](t, rec)
-	if resp.Id == nil || *resp.Id == "" {
-		t.Fatalf("create response id is empty: %+v", resp)
-	}
+	require.NotNil(t, resp.Id, "create response id is nil")
+	require.NotEmpty(t, *resp.Id, "create response id is empty")
 
 	return *resp.Id
 }
@@ -431,9 +366,7 @@ func mustDeleteTask(t *testing.T, router http.Handler, taskID string) httpopenap
 	t.Helper()
 
 	rec := mustDoRequest(t, router, http.MethodDelete, "/task/"+taskID, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("delete task status mismatch: got %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "delete task status mismatch: body=%s", rec.Body.String())
 
 	return mustDecodeJSON[httpopenapi.DeleteTaskResponse](t, rec)
 }
@@ -442,9 +375,7 @@ func mustGetAllTasks(t *testing.T, router http.Handler) httpopenapi.GetAllTasksR
 	t.Helper()
 
 	rec := mustDoRequest(t, router, http.MethodGet, "/tasks", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("get all tasks status mismatch: got %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "get all tasks status mismatch: body=%s", rec.Body.String())
 
 	return mustDecodeJSON[httpopenapi.GetAllTasksResponse](t, rec)
 }
@@ -452,27 +383,20 @@ func mustGetAllTasks(t *testing.T, router http.Handler) httpopenapi.GetAllTasksR
 func assertListedTaskDone(t *testing.T, resp httpopenapi.GetTaskResponse) {
 	t.Helper()
 
-	if resp.Status == nil || *resp.Status != httpopenapi.Done {
-		t.Fatalf("listed task status mismatch: got %+v, want %q", resp.Status, httpopenapi.Done)
-	}
-	if resp.HttpStatusCode == nil || *resp.HttpStatusCode != 200 {
-		t.Fatalf("listed task httpStatusCode mismatch: got %+v, want %d", resp.HttpStatusCode, 200)
-	}
-	if resp.Length == nil || *resp.Length != 321 {
-		t.Fatalf("listed task length mismatch: got %+v, want %d", resp.Length, 321)
-	}
-	if resp.Headers == nil {
-		t.Fatalf("listed task headers is nil")
-	}
+	require.NotNil(t, resp.Status, "listed task status is nil")
+	require.Equal(t, httpopenapi.Done, *resp.Status, "listed task status mismatch")
+	require.NotNil(t, resp.HttpStatusCode, "listed task httpStatusCode is nil")
+	require.Equal(t, 200, *resp.HttpStatusCode, "listed task httpStatusCode mismatch")
+	require.NotNil(t, resp.Length, "listed task length is nil")
+	require.Equal(t, int64(321), *resp.Length, "listed task length mismatch")
+	require.NotNil(t, resp.Headers, "listed task headers is nil")
 }
 
 func mustDoJSONRequest(t *testing.T, router http.Handler, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 
 	payload, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("marshal request body: %v", err)
-	}
+	require.NoError(t, err, "marshal request body")
 
 	return mustDoRequest(t, router, method, path, payload)
 }
@@ -501,9 +425,8 @@ func mustDecodeJSON[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 	t.Helper()
 
 	var out T
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
-		t.Fatalf("decode json response: %v; body=%s", err, rec.Body.String())
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &out)
+	require.NoError(t, err, "decode json response: body=%s", rec.Body.String())
 
 	return out
 }

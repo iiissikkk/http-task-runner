@@ -171,13 +171,8 @@ func TestServiceCreateTaskValidation(t *testing.T) {
 			svc := NewService(store, &fakeExecutor{})
 
 			_, err := svc.CreateTask(context.Background(), tc.input)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("error mismatch: got %v, want %v", err, tc.wantErr)
-			}
-
-			if len(store.tasks) != 0 {
-				t.Fatalf("unexpected tasks in store: got %d, want 0", len(store.tasks))
-			}
+			require.ErrorIs(t, err, tc.wantErr, "error mismatch")
+			require.Len(t, store.tasks, 0, "unexpected tasks in store")
 		})
 	}
 }
@@ -209,22 +204,11 @@ func TestServiceRunTaskSuccess(t *testing.T) {
 	svc.runTask("task-1")
 
 	got, err := store.GetByID(context.Background(), "task-1")
-	if err != nil {
-		t.Fatalf("failed to get task from store: %v", err)
-	}
-
-	if got.Status != task.StatusDone {
-		t.Fatalf("status mismatch: got %q, want %q", got.Status, task.StatusDone)
-	}
-	if got.HTTPStatusCode != 200 {
-		t.Fatalf("http status mismatch: got %d, want %d", got.HTTPStatusCode, 200)
-	}
-	if got.Length != 123 {
-		t.Fatalf("length mismatch: got %d, want %d", got.Length, 123)
-	}
-	if !executor.called {
-		t.Fatalf("executor was not called")
-	}
+	require.NoError(t, err, "failed to get task from store")
+	require.Equal(t, task.StatusDone, got.Status, "status mismatch")
+	require.Equal(t, 200, got.HTTPStatusCode, "http status mismatch")
+	require.Equal(t, int64(123), got.Length, "length mismatch")
+	require.True(t, executor.called, "executor was not called")
 
 	wantHistory := []task.Status{task.StatusInProcess, task.StatusDone}
 	require.Equal(t, wantHistory, store.updateHistory, "update history mismatch")
@@ -248,16 +232,9 @@ func TestServiceRunTaskExecutorError(t *testing.T) {
 	svc.runTask("task-1")
 
 	got, err := store.GetByID(context.Background(), "task-1")
-	if err != nil {
-		t.Fatalf("failed to get task from store: %v", err)
-	}
-
-	if got.Status != task.StatusError {
-		t.Fatalf("status mismatch: got %q, want %q", got.Status, task.StatusError)
-	}
-	if !executor.called {
-		t.Fatalf("executor was not called")
-	}
+	require.NoError(t, err, "failed to get task from store")
+	require.Equal(t, task.StatusError, got.Status, "status mismatch")
+	require.True(t, executor.called, "executor was not called")
 
 	wantHistory := []task.Status{task.StatusInProcess, task.StatusError}
 	require.Equal(t, wantHistory, store.updateHistory, "update history mismatch")

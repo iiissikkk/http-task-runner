@@ -50,9 +50,7 @@ func newStoreIntegrationEnv(t *testing.T) *storeIntegrationEnv {
 			}).WithStartupTimeout(3*time.Minute),
 		),
 	)
-	if err != nil {
-		t.Fatalf("start postgres container: %v", err)
-	}
+	require.NoError(t, err, "start postgres container")
 
 	t.Cleanup(func() {
 		terminateCtx, terminateCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -64,14 +62,10 @@ func newStoreIntegrationEnv(t *testing.T) *storeIntegrationEnv {
 	})
 
 	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("build postgres dsn: %v", err)
-	}
+	require.NoError(t, err, "build postgres dsn")
 
 	gormDB, sqlDB, err := NewPool(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect to postgres: %v", err)
-	}
+	require.NoError(t, err, "connect to postgres")
 
 	t.Cleanup(func() {
 		if err := sqlDB.Close(); err != nil {
@@ -79,9 +73,8 @@ func newStoreIntegrationEnv(t *testing.T) *storeIntegrationEnv {
 		}
 	})
 
-	if err := RunMigrations(ctx, gormDB); err != nil {
-		t.Fatalf("run migrations: %v", err)
-	}
+	err = RunMigrations(ctx, gormDB)
+	require.NoError(t, err, "run migrations")
 
 	env := &storeIntegrationEnv{store: NewStore(gormDB)}
 	env.resetTasks(t)
@@ -92,9 +85,8 @@ func newStoreIntegrationEnv(t *testing.T) *storeIntegrationEnv {
 func (e *storeIntegrationEnv) resetTasks(t *testing.T) {
 	t.Helper()
 
-	if err := e.store.db.Exec("TRUNCATE TABLE tasks").Error; err != nil {
-		t.Fatalf("truncate tasks table: %v", err)
-	}
+	err := e.store.db.Exec("TRUNCATE TABLE tasks").Error
+	require.NoError(t, err, "truncate tasks table")
 }
 
 func TestStoreIntegration_CreateAndGetByID(t *testing.T) {
@@ -115,14 +107,11 @@ func TestStoreIntegration_CreateAndGetByID(t *testing.T) {
 		Length:         0,
 	}
 
-	if err := env.store.Create(ctx, want); err != nil {
-		t.Fatalf("create task: %v", err)
-	}
+	err := env.store.Create(ctx, want)
+	require.NoError(t, err, "create task")
 
 	got, err := env.store.GetByID(ctx, want.ID)
-	if err != nil {
-		t.Fatalf("get task by id: %v", err)
-	}
+	require.NoError(t, err, "get task by id")
 
 	require.Equal(t, want, got, "task mismatch")
 }
@@ -145,9 +134,7 @@ func TestStoreIntegration_GetAll(t *testing.T) {
 	})
 
 	got, err := env.store.GetAll(ctx)
-	if err != nil {
-		t.Fatalf("get all tasks: %v", err)
-	}
+	require.NoError(t, err, "get all tasks")
 
 	want := []task.Task{first, second}
 	require.Equal(t, want, got, "tasks mismatch")
@@ -168,14 +155,11 @@ func TestStoreIntegration_Update(t *testing.T) {
 	want.Headers = map[string][]string{"Content-Type": {"application/json"}}
 	want.Length = 123
 
-	if err := env.store.Update(ctx, want); err != nil {
-		t.Fatalf("update task: %v", err)
-	}
+	err := env.store.Update(ctx, want)
+	require.NoError(t, err, "update task")
 
 	got, err := env.store.GetByID(ctx, want.ID)
-	if err != nil {
-		t.Fatalf("get task: %v", err)
-	}
+	require.NoError(t, err, "get task")
 
 	require.Equal(t, want, got, "task mismatch")
 }
@@ -191,15 +175,11 @@ func TestStoreIntegration_Delete(t *testing.T) {
 	})
 
 	deleted, err := env.store.Delete(ctx, seed.ID)
-	if err != nil {
-		t.Fatalf("delete task: %v", err)
-	}
+	require.NoError(t, err, "delete task")
 	require.Equal(t, seed, deleted, "deleted task mismatch")
 
 	_, err = env.store.GetByID(ctx, seed.ID)
-	if !errors.Is(err, task.ErrTaskNotFound) {
-		t.Fatalf("expected not found after delete, got: %v", err)
-	}
+	require.ErrorIs(t, err, task.ErrTaskNotFound, "expected not found after delete")
 }
 
 func TestStoreIntegration_WithinTxCommit(t *testing.T) {
@@ -219,16 +199,13 @@ func TestStoreIntegration_WithinTxCommit(t *testing.T) {
 		Length:         0,
 	}
 
-	if err := env.store.WithinTx(ctx, func(txCtx context.Context) error {
+	err := env.store.WithinTx(ctx, func(txCtx context.Context) error {
 		return env.store.Create(txCtx, want)
-	}); err != nil {
-		t.Fatalf("within tx commit: %v", err)
-	}
+	})
+	require.NoError(t, err, "within tx commit")
 
 	got, err := env.store.GetByID(ctx, want.ID)
-	if err != nil {
-		t.Fatalf("get task after commit: %v", err)
-	}
+	require.NoError(t, err, "get task after commit")
 	require.Equal(t, want, got, "task mismatch after commit")
 }
 
@@ -258,14 +235,10 @@ func TestStoreIntegration_WithinTxRollback(t *testing.T) {
 
 		return rollbackErr
 	})
-	if !errors.Is(err, rollbackErr) {
-		t.Fatalf("expected wrapped rollback error, got: %v", err)
-	}
+	require.ErrorIs(t, err, rollbackErr, "expected wrapped rollback error")
 
 	_, err = env.store.GetByID(ctx, item.ID)
-	if !errors.Is(err, task.ErrTaskNotFound) {
-		t.Fatalf("expected rolled back task to be absent, got: %v", err)
-	}
+	require.ErrorIs(t, err, task.ErrTaskNotFound, "expected rolled back task to be absent")
 }
 
 func mustCreateTask(t *testing.T, env *storeIntegrationEnv, item task.Task) task.Task {
@@ -281,8 +254,7 @@ func mustCreateTask(t *testing.T, env *storeIntegrationEnv, item task.Task) task
 		item.RequestHeaders = map[string]string{}
 	}
 
-	if err := env.store.Create(context.Background(), item); err != nil {
-		t.Fatalf("create task: %v", err)
-	}
+	err := env.store.Create(context.Background(), item)
+	require.NoError(t, err, "create task")
 	return item
 }

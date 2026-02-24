@@ -1,4 +1,4 @@
-.PHONY: run up down test test-unit test-integration test-integration-store test-integration-http test-all docker-build docker-compose-up docker-compose-down migrate-up migrate-down ps oapi-gen
+.PHONY: run up down test test-unit test-integration test-integration-store test-integration-http test-all docker-build docker-compose-up docker-compose-down ps oapi-gen
 
 COMPOSE := docker compose
 
@@ -41,14 +41,6 @@ docker-build:
 docker-compose-up: up
 
 docker-compose-down: down
-
-migrate-up:
-	$(COMPOSE) up -d db
-	$(COMPOSE) run --rm app go run ./cmd/migrate up
-
-migrate-down:
-	$(COMPOSE) up -d db
-	$(COMPOSE) run --rm app go run ./cmd/migrate down
 
 ps:
 	$(COMPOSE) ps
