@@ -96,10 +96,10 @@ func newRouterIntegrationEnv(t *testing.T, executor *threadSafeFakeExecutor) *ro
 
 	store := postgresrepo.NewStore(gormDB)
 	svc := taskservice.NewService(store, executor, store)
-	handlers := NewHandlers(svc, store, "9091", newTestLogger())
+	apiHandler := NewHandler(svc, store, "9091", newTestLogger())
 
 	env := &routerIntegrationEnv{
-		router:   NewRouter(handlers),
+		router:   NewRouter(apiHandler),
 		store:    store,
 		db:       gormDB,
 		executor: executor,

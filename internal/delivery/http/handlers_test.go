@@ -120,8 +120,8 @@ func TestHandlersCreateTask(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := NewHandlers(&mockTaskService{createTaskFn: tc.createTaskFn}, nil, "9091", newTestLogger())
-			router := NewRouter(handler)
+			apiHandler := NewHandler(&mockTaskService{createTaskFn: tc.createTaskFn}, nil, "9091", newTestLogger())
+			router := NewRouter(apiHandler)
 
 			req := httptest.NewRequest(http.MethodPost, "/task", bytes.NewBufferString(tc.body))
 			rec := httptest.NewRecorder()
@@ -164,12 +164,12 @@ func TestHandlersCreateTask(t *testing.T) {
 func TestHandlersGetTaskNotFound(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandlers(&mockTaskService{
+	apiHandler := NewHandler(&mockTaskService{
 		getTaskFn: func(_ context.Context, _ string) (task.Task, error) {
 			return task.Task{}, task.ErrTaskNotFound
 		},
 	}, nil, "9091", newTestLogger())
-	router := NewRouter(handler)
+	router := NewRouter(apiHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/task/missing-id", nil)
 	rec := httptest.NewRecorder()
@@ -193,8 +193,8 @@ func TestHandlersGetTaskNotFound(t *testing.T) {
 func TestHandlersHealthzServiceUnavailable(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandlers(&mockTaskService{}, mockHealthChecker{pingErr: errors.New("db is down")}, "9091", newTestLogger())
-	router := NewRouter(handler)
+	apiHandler := NewHandler(&mockTaskService{}, mockHealthChecker{pingErr: errors.New("db is down")}, "9091", newTestLogger())
+	router := NewRouter(apiHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -217,8 +217,8 @@ func TestHandlersHealthzServiceUnavailable(t *testing.T) {
 func TestHandlersHealthzOk(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandlers(&mockTaskService{}, mockHealthChecker{pingErr: nil}, "9091", newTestLogger())
-	router := NewRouter(handler)
+	apiHandler := NewHandler(&mockTaskService{}, mockHealthChecker{pingErr: nil}, "9091", newTestLogger())
+	router := NewRouter(apiHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -241,8 +241,8 @@ func TestHandlersHealthzOk(t *testing.T) {
 func TestHandlersHealthzNoCheckerUnavailable(t *testing.T) {
 	t.Parallel()
 
-	handler := NewHandlers(&mockTaskService{}, nil, "9091", newTestLogger())
-	router := NewRouter(handler)
+	apiHandler := NewHandler(&mockTaskService{}, nil, "9091", newTestLogger())
+	router := NewRouter(apiHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
