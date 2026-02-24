@@ -9,9 +9,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func NewRouter(handlers *Handlers) http.Handler {
+func NewRouter(handler httpopenapi.StrictServerInterface) http.Handler {
 	router := mux.NewRouter()
-	strictHandler := httpopenapi.NewStrictHandler(newOpenAPIStrictServer(handlers), nil)
+	strictHandler := httpopenapi.NewStrictHandler(handler, nil)
 	httpopenapi.HandlerFromMux(strictHandler, router)
 	router.HandleFunc("/swagger", docs.SwaggerSpec).Methods(http.MethodGet)
 	router.HandleFunc("/swagger/index.html", docs.SwaggerUI).Methods(http.MethodGet)

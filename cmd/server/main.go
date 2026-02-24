@@ -52,8 +52,8 @@ func main() {
 	store := postgres.NewStore(db)
 	httpExecutor := executor.NewHTTPExecutor(cfg.HTTPExecutorTimeout)
 	taskService := service.NewService(store, httpExecutor, store)
-	handlers := delivery.NewHandlers(taskService, store, cfg.HTTPPort, logger)
-	router := delivery.NewRouter(handlers)
+	apiHandler := delivery.NewHandler(taskService, store, cfg.HTTPPort, logger)
+	router := delivery.NewRouter(apiHandler)
 
 	server := delivery.NewServer(delivery.ServerConfig{
 		Addr:         cfg.HTTPAddr,
