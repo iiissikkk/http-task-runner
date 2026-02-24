@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +19,7 @@ import (
 	taskservice "todoapp/internal/usecase/task"
 
 	"github.com/docker/go-connections/nat"
+	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -236,9 +236,7 @@ func TestRouterIntegration_CreateThenGetTask(t *testing.T) {
 		"Content-Type": {"application/json"},
 		"X-Source":     {"fake-executor"},
 	}
-	if !reflect.DeepEqual(*getResp.Headers, wantHeaders) {
-		t.Fatalf("get task headers mismatch:\n got: %#v\nwant: %#v", *getResp.Headers, wantHeaders)
-	}
+	require.Equal(t, wantHeaders, *getResp.Headers, "get task headers mismatch")
 }
 
 func TestRouterIntegration_CreateMultiplyThenGetTasks(t *testing.T) {
@@ -320,12 +318,8 @@ func TestRouterIntegration_CreateMultiplyThenGetTasks(t *testing.T) {
 		"Content-Type": {"application/json"},
 		"X-Source":     {"fake-executor"},
 	}
-	if !reflect.DeepEqual(*first.Headers, wantHeaders) {
-		t.Fatalf("first task headers mismatch:\n got: %#v\nwant: %#v", *first.Headers, wantHeaders)
-	}
-	if !reflect.DeepEqual(*second.Headers, wantHeaders) {
-		t.Fatalf("second task headers mismatch:\n got: %#v\nwant: %#v", *second.Headers, wantHeaders)
-	}
+	require.Equal(t, wantHeaders, *first.Headers, "first task headers mismatch")
+	require.Equal(t, wantHeaders, *second.Headers, "second task headers mismatch")
 }
 
 func TestRouterIntegration_CreateThenDeleteTask(t *testing.T) {

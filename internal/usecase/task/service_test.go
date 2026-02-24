@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"errors"
-	"reflect"
 	"sync"
 	"testing"
 
 	"todoapp/internal/domain/task"
+
+	"github.com/stretchr/testify/require"
 )
 
 type fakeExecutor struct {
@@ -226,9 +227,7 @@ func TestServiceRunTaskSuccess(t *testing.T) {
 	}
 
 	wantHistory := []task.Status{task.StatusInProcess, task.StatusDone}
-	if !reflect.DeepEqual(store.updateHistory, wantHistory) {
-		t.Fatalf("update history mismatch: got %v, want %v", store.updateHistory, wantHistory)
-	}
+	require.Equal(t, wantHistory, store.updateHistory, "update history mismatch")
 }
 
 func TestServiceRunTaskExecutorError(t *testing.T) {
@@ -261,7 +260,5 @@ func TestServiceRunTaskExecutorError(t *testing.T) {
 	}
 
 	wantHistory := []task.Status{task.StatusInProcess, task.StatusError}
-	if !reflect.DeepEqual(store.updateHistory, wantHistory) {
-		t.Fatalf("update history mismatch: got %v, want %v", store.updateHistory, wantHistory)
-	}
+	require.Equal(t, wantHistory, store.updateHistory, "update history mismatch")
 }

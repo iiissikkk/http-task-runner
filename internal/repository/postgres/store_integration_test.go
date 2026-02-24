@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -124,9 +124,7 @@ func TestStoreIntegration_CreateAndGetByID(t *testing.T) {
 		t.Fatalf("get task by id: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("task mismatch:\n got: %#v\nwant: %#v", got, want)
-	}
+	require.Equal(t, want, got, "task mismatch")
 }
 
 func TestStoreIntegration_GetAll(t *testing.T) {
@@ -152,9 +150,7 @@ func TestStoreIntegration_GetAll(t *testing.T) {
 	}
 
 	want := []task.Task{first, second}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("tasks mismatch:\n got: %#v\nwant: %#v", got, want)
-	}
+	require.Equal(t, want, got, "tasks mismatch")
 }
 
 func TestStoreIntegration_Update(t *testing.T) {
@@ -181,9 +177,7 @@ func TestStoreIntegration_Update(t *testing.T) {
 		t.Fatalf("get task: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("task mismatch:\n got: %#v\nwant: %#v", got, want)
-	}
+	require.Equal(t, want, got, "task mismatch")
 }
 
 func TestStoreIntegration_Delete(t *testing.T) {
@@ -200,9 +194,7 @@ func TestStoreIntegration_Delete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete task: %v", err)
 	}
-	if !reflect.DeepEqual(deleted, seed) {
-		t.Fatalf("deleted task mismatch:\n got: %#v\nwant: %#v", deleted, seed)
-	}
+	require.Equal(t, seed, deleted, "deleted task mismatch")
 
 	_, err = env.store.GetByID(ctx, seed.ID)
 	if !errors.Is(err, task.ErrTaskNotFound) {
@@ -237,9 +229,7 @@ func TestStoreIntegration_WithinTxCommit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get task after commit: %v", err)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("task mismatch after commit:\n got: %#v\nwant: %#v", got, want)
-	}
+	require.Equal(t, want, got, "task mismatch after commit")
 }
 
 func TestStoreIntegration_WithinTxRollback(t *testing.T) {
